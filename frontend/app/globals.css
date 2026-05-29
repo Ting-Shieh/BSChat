@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* BSChat Design Foundation v1.0 — Light mode default（展場戶外可讀） */
+:root {
+  --color-primary: #0f4c5c;
+  --color-primary-hover: #0b3a47;
+  --color-primary-muted: #e6f2f5;
+
+  --color-accent: #d97706;
+  --color-accent-hover: #b45309;
+  --color-accent-muted: #fef3c7;
+
+  --color-bg: #fafaf9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-border: #e7e5e4;
+  --color-border-strong: #d6d3d1;
+
+  --color-text-primary: #1c1917;
+  --color-text-secondary: #57534e;
+  --color-text-tertiary: #a8a29e;
+
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #0284c7;
+
+  --color-ai-bg: #eff6ff;
+  --color-ai-border: #bfdbfe;
+  --color-ai-text: #1e40af;
+
+  --color-privacy-bg: #f0fdf4;
+  --color-privacy-text: #166534;
+
+  --background: var(--color-bg);
+  --foreground: var(--color-text-primary);
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text-primary);
+  --color-brand: var(--color-primary);
+  --color-brand-muted: var(--color-primary-muted);
+  --color-accent-brand: var(--color-accent);
+  --color-surface: var(--color-surface);
+  --color-border-default: var(--color-border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-geist-sans), "PingFang TC", "Noto Sans TC", sans-serif;
+}
+
+.theme-camera {
+  --color-bg: #0a0a0a;
+  --color-text-primary: #fafaf9;
+  --color-border: #3f3f46;
+}

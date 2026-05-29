@@ -1,0 +1,1 @@
+"""BSChat backend application."""
