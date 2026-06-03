@@ -72,16 +72,16 @@ def enqueue_company_enrich(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
     workspace_id: uuid.UUID,
-    contact_id: uuid.UUID,
     company_name: str,
     contact_website: str | None,
+    contact_id: uuid.UUID | None = None,
     trigger_type: str = "ingest",
 ) -> None:
     payload = {
         "company_id": str(company_id),
         "user_id": str(user_id),
         "workspace_id": str(workspace_id),
-        "contact_id": str(contact_id),
+        "contact_id": str(contact_id) if contact_id else None,
         "company_name": company_name,
         "contact_website": contact_website,
         "trigger_type": trigger_type,

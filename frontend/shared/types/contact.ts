@@ -36,6 +36,7 @@ export interface ProvenanceField {
 
 export interface ContactDetail {
   id: string;
+  company_id?: string | null;
   display_name: string | null;
   company_name: string | null;
   title: string | null;

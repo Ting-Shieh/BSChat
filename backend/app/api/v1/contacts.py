@@ -9,9 +9,18 @@ from app.core.auth import CurrentUser
 from app.core.db import get_db
 from app.models.company import Company, CompanyEnrichment
 from app.modules.m3_contacts.detail_builder import to_detail, to_list_item
-from app.modules.m3_contacts.upsert import get_contact, list_contacts, soft_delete_contact
+from app.modules.m3_contacts.upsert import (
+    get_contact,
+    list_contacts,
+    soft_delete_contact,
+    update_contact_fields,
+)
 from app.modules.m6_enrichment.section_builder import products_preview
-from app.schemas.contact import ContactDetailResponse, ContactListResponse
+from app.schemas.contact import (
+    ContactDetailResponse,
+    ContactListResponse,
+    ContactUpdateRequest,
+)
 
 router = APIRouter()
 
@@ -49,6 +58,44 @@ async def get_contact_detail(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     return await to_detail(db, contact)
+
+
+@router.patch("/contacts/{contact_id}", response_model=ContactDetailResponse)
+async def patch_contact(
+    contact_id: uuid.UUID,
+    body: ContactUpdateRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContactDetailResponse:
+    contact = await get_contact(db, contact_id, user.id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    payload = body.fields.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="NO_FIELDS_TO_UPDATE")
+
+    field_map = {
+        "display_name": "display_name",
+        "company_name": "company_name",
+        "title": "title",
+        "address": "address",
+        "website": "website",
+        "phone": "phone",
+        "email": "email",
+    }
+    updates = {field_map[k]: v for k, v in payload.items() if k in field_map}
+
+    await update_contact_fields(
+        db,
+        contact,
+        fields=updates,
+        expected_version=body.version,
+    )
+    updated = await get_contact(db, contact_id, user.id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return await to_detail(db, updated)
 
 
 @router.delete("/contacts/{contact_id}", status_code=204)

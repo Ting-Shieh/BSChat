@@ -2,14 +2,39 @@
 
 import type { CompanyEnrichmentSection } from "@/shared/types/contact";
 
+type Props = {
+  enrichment: CompanyEnrichmentSection;
+  companyId?: string | null;
+  onRefresh?: () => void;
+  refreshPending?: boolean;
+  refreshError?: string | null;
+};
+
 export function CompanyEnrichmentBlock({
   enrichment,
-}: {
-  enrichment: CompanyEnrichmentSection;
-}) {
+  companyId,
+  onRefresh,
+  refreshPending,
+  refreshError,
+}: Props) {
   if (enrichment.status === "hidden") {
     return null;
   }
+
+  const refreshButton =
+    enrichment.can_refresh && companyId && onRefresh ? (
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={refreshPending}
+        className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary)] hover:border-[var(--color-primary)] disabled:opacity-50"
+      >
+        {refreshPending ? "更新中…" : "更新公司資訊"}
+        {enrichment.refresh_quota_remaining != null && enrichment.refresh_quota_remaining >= 0
+          ? `（本月剩 ${enrichment.refresh_quota_remaining} 次）`
+          : ""}
+      </button>
+    ) : null;
 
   if (enrichment.status === "pending") {
     return (
@@ -25,6 +50,10 @@ export function CompanyEnrichmentBlock({
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h2 className="mb-2 text-sm font-medium text-[var(--color-text-secondary)]">公司補全</h2>
         <p className="text-sm text-[var(--color-text-tertiary)]">無法取得公開資訊，可稍後再試或確認公司名稱。</p>
+        {refreshButton}
+        {refreshError && (
+          <p className="mt-2 text-xs text-[var(--color-accent-hover)]">{refreshError}</p>
+        )}
       </section>
     );
   }
@@ -34,6 +63,7 @@ export function CompanyEnrichmentBlock({
       <section className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h2 className="mb-1 text-sm font-medium text-[var(--color-text-secondary)]">公司補全</h2>
         <p className="text-xs text-[var(--color-text-tertiary)]">已隱藏 AI 補全內容</p>
+        {refreshButton}
       </section>
     );
   }
@@ -74,6 +104,11 @@ export function CompanyEnrichmentBlock({
 
       {enrichment.provenance_label && (
         <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">{enrichment.provenance_label}</p>
+      )}
+
+      {refreshButton}
+      {refreshError && (
+        <p className="mt-2 text-xs text-[var(--color-accent-hover)]">{refreshError}</p>
       )}
     </section>
   );

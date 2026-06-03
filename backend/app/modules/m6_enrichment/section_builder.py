@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.entitlements import manual_refresh_remaining
 from app.models.company import Company, CompanyEnrichment, CompanyFieldReview
 from app.models.user import UserEntitlement
 from app.schemas.contact import CompanyEnrichmentSection
@@ -25,7 +26,11 @@ async def build_enrichment_section(
         return CompanyEnrichmentSection(status="hidden", can_refresh=False)
 
     ent = await _get_entitlement(db, user_id)
-    manual_remaining = max(0, ent.manual_refresh_quota_monthly - ent.manual_refresh_used_this_month)
+    manual_remaining = manual_refresh_remaining(ent)
+    can_manual_refresh = (
+        company.enrich_status != "pending"
+        and (ent.manual_refresh_quota_monthly < 0 or manual_remaining > 0)
+    )
 
     review_result = await db.execute(
         select(CompanyFieldReview).where(
@@ -37,13 +42,17 @@ async def build_enrichment_section(
     review = review_result.scalar_one_or_none()
 
     if company.enrich_status == "pending" or company.enrich_status == "never":
-        return CompanyEnrichmentSection(status="pending", can_refresh=False)
+        return CompanyEnrichmentSection(
+            status="pending",
+            can_refresh=can_manual_refresh and company.enrich_status != "pending",
+            refresh_quota_remaining=manual_remaining if manual_remaining >= 0 else None,
+        )
 
     if review and review.review_status == "rejected":
         return CompanyEnrichmentSection(
             status="rejected",
-            can_refresh=True,
-            refresh_quota_remaining=manual_remaining,
+            can_refresh=can_manual_refresh,
+            refresh_quota_remaining=manual_remaining if manual_remaining >= 0 else None,
         )
 
     enrichment = await _latest_enrichment(db, company.id)
@@ -57,8 +66,8 @@ async def build_enrichment_section(
         return CompanyEnrichmentSection(
             status="failed",
             website_url=company.website_url,
-            can_refresh=True,
-            refresh_quota_remaining=manual_remaining,
+            can_refresh=can_manual_refresh,
+            refresh_quota_remaining=manual_remaining if manual_remaining >= 0 else None,
         )
 
     if company.enrich_status == "partial" or conf < 0.5:
@@ -69,8 +78,8 @@ async def build_enrichment_section(
             confidence=conf,
             provenance_label=_provenance_label(enrichment),
             updated_at=_iso(company.last_enriched_at),
-            can_refresh=True,
-            refresh_quota_remaining=manual_remaining,
+            can_refresh=can_manual_refresh,
+            refresh_quota_remaining=manual_remaining if manual_remaining >= 0 else None,
             review_status=review.review_status if review else "auto",
         )
 
@@ -81,8 +90,8 @@ async def build_enrichment_section(
         confidence=conf,
         provenance_label=_provenance_label(enrichment),
         updated_at=_iso(company.last_enriched_at),
-        can_refresh=True,
-        refresh_quota_remaining=manual_remaining,
+        can_refresh=can_manual_refresh,
+        refresh_quota_remaining=manual_remaining if manual_remaining >= 0 else None,
         review_status=review.review_status if review else "auto",
         needs_review=company.needs_review,
     )

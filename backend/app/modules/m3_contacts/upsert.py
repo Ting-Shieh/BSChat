@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,6 +11,7 @@ from app.models.contact_search_document import ContactSearchDocument
 from app.modules.m6_enrichment.service import dispatch_company_enrich, trigger_enrich_for_contact
 from app.schemas.events.contact_upsert import ContactUpsertRequested
 from app.workers.tasks.contact_index import enqueue_contact_index
+from app.workers.tasks.contact_inference import enqueue_contact_inference
 
 PROVENANCE_FIELDS = ["name", "company", "title", "address", "website"]
 
@@ -81,6 +83,9 @@ async def upsert_from_payload(db: AsyncSession, payload: dict) -> Contact:
     else:
         contact.version += 1
 
+    if contact.deleted_at is not None:
+        contact.deleted_at = None
+
     contact.display_name = display_name
     contact.company_name = fields.company
     contact.title = fields.title
@@ -111,7 +116,25 @@ async def upsert_from_payload(db: AsyncSession, payload: dict) -> Contact:
 
     enqueue_contact_index(contact.id)
 
+    if fields.title and fields.title.strip():
+        enqueue_contact_inference(contact.id, pass_number=1)
+
     return contact
+
+
+async def get_active_contact_by_raw_card(
+    db: AsyncSession,
+    raw_card_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> Contact | None:
+    result = await db.execute(
+        select(Contact).where(
+            Contact.raw_card_id == raw_card_id,
+            Contact.user_id == user_id,
+            Contact.deleted_at.is_(None),
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def _upsert_provenance(
@@ -172,6 +195,125 @@ async def get_contact(db: AsyncSession, contact_id: uuid.UUID, user_id: uuid.UUI
         .options(selectinload(Contact.provenance))
     )
     return result.scalar_one_or_none()
+
+
+def _normalize_optional_str(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+async def update_contact_fields(
+    db: AsyncSession,
+    contact: Contact,
+    *,
+    fields: dict,
+    expected_version: int,
+) -> tuple[Contact, bool]:
+    """Apply manual edits. Returns (contact, should_dispatch_enrich)."""
+    if contact.version != expected_version:
+        raise HTTPException(status_code=409, detail="CONTACT_VERSION_CONFLICT")
+
+    old_company = (contact.company_name or "").strip()
+    old_title = (contact.title or "").strip()
+
+    if "display_name" in fields:
+        name = _normalize_optional_str(fields["display_name"])
+        contact.display_name = name or "未命名"
+    if "company_name" in fields:
+        contact.company_name = _normalize_optional_str(fields["company_name"])
+    if "title" in fields:
+        contact.title = _normalize_optional_str(fields["title"])
+    if "address" in fields:
+        contact.address = _normalize_optional_str(fields["address"])
+    if "website" in fields:
+        contact.website = _normalize_optional_str(fields["website"])
+    if "phone" in fields:
+        phone = _normalize_optional_str(fields["phone"])
+        contact.phones = _phones_json([phone]) if phone else []
+    if "email" in fields:
+        email = _normalize_optional_str(fields["email"])
+        contact.emails = _emails_json([email]) if email else []
+
+    company_changed = "company_name" in fields and (contact.company_name or "").strip() != old_company
+    title_changed = "title" in fields and (contact.title or "").strip() != old_title
+
+    provenance_map = {
+        "name": contact.display_name,
+        "company": contact.company_name,
+        "title": contact.title,
+        "address": contact.address,
+        "website": contact.website,
+    }
+    for field_name, value in provenance_map.items():
+        if field_name == "name" and "display_name" not in fields:
+            continue
+        if field_name == "company" and "company_name" not in fields:
+            continue
+        if field_name == "title" and "title" not in fields:
+            continue
+        if field_name == "address" and "address" not in fields:
+            continue
+        if field_name == "website" and "website" not in fields:
+            continue
+        await _set_manual_provenance(db, contact, field_name, value)
+
+    contact.search_text = _build_search_text(
+        contact.display_name,
+        contact.company_name,
+        contact.title,
+        contact.source_label,
+        contact.phones or [],
+        contact.emails or [],
+    )
+    contact.search_status = "pending_index"
+    contact.version += 1
+    await db.flush()
+
+    should_enqueue = False
+    enrich_trigger = "company_name_changed"
+    if company_changed:
+        if contact.company_name:
+            should_enqueue = await trigger_enrich_for_contact(db, contact, trigger_type=enrich_trigger)
+        else:
+            contact.company_id = None
+    elif "website" in fields and contact.company_name and contact.company_id:
+        should_enqueue = await trigger_enrich_for_contact(db, contact, trigger_type=enrich_trigger)
+
+    await db.commit()
+
+    if should_enqueue:
+        dispatch_company_enrich(contact, trigger_type=enrich_trigger)
+
+    enqueue_contact_index(contact.id)
+
+    if title_changed and contact.title:
+        enqueue_contact_inference(contact.id, pass_number=1)
+
+    return contact, should_enqueue
+
+
+async def _set_manual_provenance(
+    db: AsyncSession,
+    contact: Contact,
+    field_name: str,
+    value: str | None,
+) -> None:
+    result = await db.execute(
+        select(ContactFieldProvenance).where(
+            ContactFieldProvenance.contact_id == contact.id,
+            ContactFieldProvenance.field_name == field_name,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = ContactFieldProvenance(contact_id=contact.id, field_name=field_name)
+        db.add(row)
+    row.current_value = value
+    row.source = "manual"
+    row.source_ref = None
+    row.confidence = 1.0
 
 
 async def soft_delete_contact(db: AsyncSession, contact: Contact) -> None:

@@ -42,7 +42,21 @@ async def run_company_enrich(
     await db.commit()
 
     started = datetime.now(UTC)
-    website = company.website_url or await discover_website(company_name, contact_website)
+    contact_email: str | None = None
+    if contact_id:
+        contact_row = await db.execute(
+            select(Contact.emails).where(Contact.id == contact_id, Contact.user_id == user_id)
+        )
+        emails = contact_row.scalar_one_or_none()
+        if emails:
+            primary = next((e for e in emails if isinstance(e, dict) and e.get("primary")), None)
+            picked = primary or (emails[0] if emails else None)
+            if isinstance(picked, dict):
+                contact_email = picked.get("value") or picked.get("normalized")
+
+    website = company.website_url or await discover_website(
+        company_name, contact_website, contact_email
+    )
     if website and not website.startswith(("http://", "https://")):
         website = f"https://{website}"
 
@@ -112,6 +126,11 @@ async def run_company_enrich(
         from app.workers.tasks.contact_index import enqueue_contact_index
 
         enqueue_contact_index(contact_id)
+
+    if enrich_status in ("completed", "partial") and conf >= 0.5 and output.main_products:
+        from app.workers.tasks.contact_inference import enqueue_company_inference_pass2
+
+        enqueue_company_inference_pass2(company.id)
 
 
 async def _finish_failed(

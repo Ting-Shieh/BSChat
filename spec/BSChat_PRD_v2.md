@@ -170,6 +170,9 @@ v2 訪談揭示的真實需求是：
 | DDR-71 | MVP **不顯示**通用搜尋靈感 chips；**Pro** 才提供依已索引名片推導的個人化範例查詢 | 通用範例與使用者名片池無關、易誤觸消耗額度；個人化建議需有資料基礎才有價值；仍不固定儲存 profile（延續 DDR-5） | M5 搜尋、M1 訂閱 |
 | DDR-72 | **UI 只顯示 Pool A「可搜尋」人數**；`indexed_count` 限指**自己名片庫已建索引**且**刪除同步遞減**；Pool B / 非自己庫的 AI 推薦來源**不共用「已索引」文案**，Pro/Phase 3 另列「商務網絡」或結果 `source_pool` | 避免「已索引 vs 聯絡人總數」雙數字混淆；為 Network Explorer / 庫外推薦預留語意 | M5、M3、M11、M1 |
 | DDR-73 | 對話式搜尋解析**多維度查詢條件**（公司/產業/場合/職能/地區等），**不限於職稱字面**；使用者明確約束（如「架構師就好」）視為**硬條件**，跨欄位比對（`title`、`responsibility_scope`、`company_products`、`company_name`、`source_label` 等），**不符合則不返回**；禁止 `match_reason` 寫「不符合」卻仍出現在結果中 | 使用者用產業/公司/情境問法多樣；召回+rerank 易「部分相關就列出」；硬條件寧可 NO_MATCH（延續 DDR-5） | M5 搜尋、M3、M6 |
+| DDR-74 | **個人職責理解分層**：Free = M3 LLM 推估（title + company + M6 products）；Pro/Enterprise = 可加 **M3.5 LinkedIn + LLM** 個人公開資料補充；Free **永不**觸發外部 people search | 持續 API 成本與錯人風險應付費；Free 仍保留 Aha（公司 + 推估）；LinkedIn 資料經第三方/API，非 M6 公司 enrich | M3、M3.5、M1 |
+| DDR-75 | M3.5 **不自動對全庫 silent 搜人**；僅：① 名片/import 含 `linkedin_url` 且 Pro ② 使用者手動「LinkedIn 補充」③ Enterprise 可配置 batch（Phase 2）；`match_score < 0.8` 不寫入 Contact | 同名消歧與合規；寧可提示確認也不錯人寫庫 | M3.5、M1 |
+| DDR-76 | M3.5 成功結果 **不覆寫** OCR `title`；寫入 `person_responsibility_scope`（或增強 `responsibility_scope`）並標 `provenance=linkedin`；M5 硬匹配需 `person_match_score ≥ 0.8` 且 confidence ≥ 0.75 | 名片為交換快照；LinkedIn 為補充視角 | M3.5、M5、M3 |
 
 ---
 
@@ -347,56 +350,217 @@ Step 7: 隱私說明（簡短，非阻塞）
 - 不鎖定 **第一次 enrich** 或 **基本搜尋（cache）** —— 避免打掉 Aha Moment
 - 持續 API 成本的功能（自動刷新、live 查、高頻手動更新）→ 付費合理
 
-### 11.2 方案對照
+### 11.2 方案對照（摘要）
 
-| 能力 | Free | Pro（Pilot 後定價） |
-|------|------|---------------------|
-| 收錄時公司 enrich 一次 | ✅ | ✅ |
-| 名片庫/詳情看主要產品 | ✅ | ✅ |
-| M5 搜尋（使用已快取資料，Pool A） | ✅（可設合理額度） | ✅ 較高額度 |
-| **商務網絡 / 庫外推薦搜尋**（Pool B，非自己收錄） | ❌ | Phase 3 / Network Explorer |
-| **個人化搜尋建議**（依已索引名片推導） | ❌ | ✅ P1 |
-| M5 搜尋時 **live 上網查** | 試用（如每月 5 次） | ✅ 較高額度 |
-| **手動「更新公司資訊」** | 每月 3 次 | 無限或 50 次/月 |
-| **過期自動 refresh**（>N 天背景更新） | ❌ | ✅（預設 90 天，可調 30/60/90） |
-| 人員在職狀態追蹤 | ❌ | ❌（非產品範圍） |
-| enrich 優先佇列 | ❌ | ✅ P2 |
+> **完整對照表**：§11.2.1（Personal Free / Pro）· §11.2.2（Enterprise Personal · Phase 2）· §11.2.3（Enterprise Publisher · Phase 3）  
+> **Quota 數字**：均為 **Pilot 測試暫定值（TBD）**，上線前鎖定；MVP 實作可先 hardcode，schema 預留。
+
+| 能力 | Free | Pro |
+|------|------|-----|
+| 收錄 + 公司 enrich + M3 LLM 推估 + Pool A 搜尋 | ✅ | ✅ |
+| M3.5 LinkedIn + LLM 個人補充 | ❌ | ✅ |
+| 手動「更新公司資訊」（M6） | 有限額 | 較高額度 |
+| 過期自動 refresh 公司資料 | ❌ | ✅ |
+| Pool B 公開商務池 | ❌ | ❌（見 §11.2.3 / §13） |
 
 *Pro 價格 Pilot 後驗證（例如 NT$299/月），不作為 MVP 阻塞項。*
+
+---
+
+### 11.2.1 Personal 方案總對照（Free · Pro）
+
+**適用對象**：個人業務；只搜尋**自己收錄**的名片池（Pool A）。  
+**MVP 範圍**：先實作 **Free + Pro**；Enterprise 見 §11.2.2 / §11.2.3。
+
+#### 名詞：「手動更新公司資訊」是什麼？（M6 · 非 LinkedIn）
+
+指使用者在聯絡人詳情 **「公司補全」區** 點 **「更新公司資訊」**，系統**重新抓取公司官網 + LLM**，更新 **主要產品/服務**（`main_products`）。
+
+| 機制 | 觸發 | 更新對象 |
+|------|------|----------|
+| 收錄時 enrich（Layer 1） | 收名片後自動 | 公司產品 |
+| **手動更新公司（M6 manual refresh）** | **使用者按鈕** | 公司產品 |
+| 過期自動 refresh（Layer 2，Pro） | 背景排程 | 公司產品 |
+| M3.5 LinkedIn 補充（Pro） | 按鈕 / URL 自動 | **個人**職責（另一套 quota） |
+
+#### A. 收錄與名片庫（M2 / M3 / M7）
+
+| 能力 | Free | Pro |
+|------|:----:|:---:|
+| 批次連拍 / QR / 貼連結收錄 | ✅ | ✅ |
+| 背景 OCR + 待確認 | ✅ | ✅ |
+| 名片庫列表 / 詳情 | ✅ | ✅ |
+| 名片原文（OCR）+ Provenance | ✅ | ✅ |
+| 軟刪除 / 預設私密（Pool A） | ✅ | ✅ |
+| 儲存 `linkedin_url`（不抓取） | ✅ | ✅ |
+
+#### B. 公司理解（M6）
+
+| 能力 | Free | Pro |
+|------|:----:|:---:|
+| 收錄時公司 enrich 一次 | ✅ | ✅ |
+| 詳情 / 列表看主要產品 | ✅ | ✅ |
+| 接受 / 拒絕 / 覆寫公司 AI 補全 | ✅ | ✅ |
+| **手動「更新公司資訊」**（M6 manual refresh） | ✅ **3 次/月** ※ | ✅ **50 次/月** ※ |
+| 過期自動 refresh（>N 天背景更新） | ❌ | ✅（預設 90 天，可調 30/60/90） |
+| enrich 優先佇列 | ❌ | ✅ P2 |
+| 人員在職 / 離職追蹤 | ❌ | ❌ |
+
+※ **TBD**：Pilot 測試後調整；Pro「50 次/月」為暫定，可能改為更高或「近無限」。
+
+#### C. 個人職責（M3 + M3.5）
+
+| 能力 | Free | Pro |
+|------|:----:|:---:|
+| **M3 LLM 推估**（title + company + M6 products） | ✅ | ✅ |
+| confidence < 0.6 不顯示 | ✅ | ✅ |
+| **M3.5 LinkedIn + LLM 個人補充** | ❌ | ✅ |
+| 名片含 LinkedIn URL → 自動 M3.5 | ❌ | ✅（預設開，可關） |
+| 詳情「LinkedIn 補充」手動 | ❌ | ✅ |
+| M5「深入查此人」→ M3.5 | ❌ | ✅ P1 |
+| **person_linkedin 月度額度** | **0** ※ | **20 次/月** ※ |
+| URL 自動 M3.5 是否占 manual quota | — | **不占** ※ |
+
+※ **TBD**：Pilot 後鎖定。詳規：`spec/modules/BSChat_PM_M35.md`
+
+**Free UX**：詳情顯示 M3「AI 推估」+ Pro 升級 CTA；不呼叫 M3.5 API。
+
+#### D. AI 搜尋（M5 · 僅 Pool A）
+
+| 能力 | Free | Pro |
+|------|:----:|:---:|
+| 對話式搜尋（已索引 cache） | ✅ | ✅ |
+| **search_cache 每日額度** | **10 次/日** ※ | **50 次/日** ※ |
+| 個人化搜尋建議 chips | ❌ | ✅ P1 |
+| M5 **live 上網查**（公司，Layer 3） | **5 次/月** ※ | **30 次/月** ※ |
+| 搜尋 Pool B 公開商務池 | ❌ | ❌ |
+
+※ **TBD**：Pilot 測試暫定值。
+
+#### E. 行動與其他（M8 / M4 / M1）
+
+| 能力 | Free | Pro |
+|------|:----:|:---:|
+| 複製電話 / Email（M8） | ✅ | ✅ |
+| 重複偵測 Email/電話（M4） | ✅ P1 | ✅ P1 |
+| 升級 / 帳單 / 用量顯示 | — | ✅ |
+
+#### F. 一句對照（行銷用）
+
+| | Free | Pro |
+|---|------|-----|
+| **賣點** | 收錄即看懂公司 + LLM 推估 + 找得到人 | 資料更新 + LinkedIn 核對職責 + 較高搜尋/live 額度 |
+| **不賣** | LinkedIn 個人補充、auto refresh、高頻 live 查 | Pool B 公開池（Phase 3） |
+
+---
+
+### 11.2.2 Enterprise Personal（團隊採購 · Phase 2 · 邊做邊定）
+
+> **與 §11.2.1 的 Pro 同屬 Pool A 私人名片庫**；不是公開目錄。MVP **可不實作**，schema / 文案預留。
+
+**誰買**：公司為 **自己的業務團隊** 採購（多 seat）。
+
+**做什麼**：
+- 每位成員 **各自收名片**、**只搜自己庫**（與 Free/Pro 相同產品邏輯）
+- 比 Pro 更高 quota、團隊帳單、管理與稽核（Phase 2）
+
+**不做什麼**：
+- ❌ 不公開成員收錄的私人聯絡人給其他 BSChat 用戶
+- ❌ 不是 HR / 在職追蹤（DDR-33）
+
+| 能力（相對 Pro） | Enterprise Personal ※ |
+|------------------|----------------------|
+| 包含 Pro 全部能力 | ✅ |
+| person_linkedin / 月 | **100** ※（或合約） |
+| search_cache / 日 | **100** ※ |
+| live 查 / 月 | **100** ※ |
+| 手動更新公司 / 月 | **100** ※ |
+| 團隊共享 person quota | Phase 2 |
+| 操作 audit log | Phase 2 |
+| 全庫 batch person enrich | Phase 2（admin opt-in） |
+| People API SLA | 合約 |
+
+※ **TBD** · 詳見 `spec/modules/BSChat_PM_M35.md` F-35.11 / F-35.12
+
+**類比**：公司團購「加強版 Pro」—— 仍是私人抽屉，不是公司對外黃頁。
+
+---
+
+### 11.2.3 Enterprise Publisher（企業公開目錄 · Phase 3 · 邊做邊定）
+
+> **與 §11.2.2 完全不同產品線**；完整願景見 **§13**。MVP **不實作**。
+
+**誰買**：B2B 企業（例如設備商、SI 廠商）。
+
+**做什麼**：
+- 企業在平台 **建立 / 維護員工電子名片**（自願公開）
+- **其他** 付費用戶可透過 **Pool B / Network Explorer** 搜到這些人
+
+**不做什麼**：
+- ❌ 不公開「業務員抽屉裡收來的私人名片」
+- ❌ Personal Free/Pro 用戶 **不能** 因此搜到他人私人庫
+
+| 能力 | Free | Pro | Enterprise Publisher |
+|------|:----:|:---:|:--------------------:|
+| 搜尋自己的 Pool A | ✅ | ✅ | ✅（企業 admin 亦可用） |
+| 建立 / 維護 **公開** 員工電子名片 | ❌ | ❌ | ✅ |
+| 被 Network Explorer 搜到（Pool B） | ❌ | ❌ | ✅ |
+| 搜尋他人 **私人** 收錄聯絡人 | ❌ | ❌ | ❌ |
+
+**類比**：企業維護 **官方可被找到的人員目錄**（供給端）；Personal 用戶是 **需求端** 搜自己庫或未來搜公開池。
+
+**雙邊收費**（§11.5）：需求端 Network Explorer；供給端 Enterprise Publisher 年訂閱。
+
+---
 
 ### 11.3 模組職責（付費相關）
 
 ```
 M1 帳號/訂閱（設定入口）
-  · plan_tier: free | pro
+  · plan_tier: free | pro | enterprise
   · auto_refresh_enabled（Pro）
   · auto_refresh_interval_days
   · manual_refresh 月度配額與用量
+  · person_enrich_mode: inference_only | linkedin_llm（DDR-74）
+  · person_linkedin_quota_monthly / used / reset_at
+  · person_linkedin_auto_on_url（Pro 開關）
   · 升級/帳單 UI
 
+M3 個人職責推估（Free + Pro 共用）
+  · Pass 1/2 LLM inference；confidence gate 0.6
+  · 寫入 contacts.responsibility_scope
+
+M3.5 個人公開資料補充（Pro；Enterprise Personal 見 §11.2.2）
+  · People search API 或 LinkedIn URL extract + LLM 摘要
+  · match_score gate 0.8；讀 M1 entitlement；Free 入口 hard block
+  · 詳見 spec/modules/BSChat_PM_M35.md · 方案對照 PRD §11.2.1
+
 M6 公司補全（執行引擎）
-  · ingest / manual / stale_auto enrich
+  · ingest / manual / stale_auto enrich（僅公司；不做個人 LinkedIn）
   · 讀取 M1 entitlement 決定是否跑 stale job
   · enriched_at、provenance
 
 M5 AI 搜尋
   · query-time live 查（受 plan 額度限制）
   · 合併 cache + live 結果；不自動覆寫 cache（DDR-36）
+  · 詳情/M5 可觸發 M3.5「深入查此人」（扣 person_linkedin quota）
 ```
 
-### 11.4 Team 版（Phase 後，非 MVP）
+### 11.4 Team 版（Phase 2 · 對齊 §11.2.2 Enterprise Personal）
 
-- 共享 refresh 策略、團隊用量報表、集中 enrich 配額
+- 共享 refresh 策略、團隊用量報表、集中 enrich / person_linkedin 配額
+- **非** Enterprise Publisher（§11.2.3）；仍只操作 Pool A 私人庫
 
 ### 11.5 Enterprise + 公開商務池（Phase 3 · v2.2）
 
-> 完整願景見 **§13**。MVP **不**實作跨池搜尋；Personal Pro 仍只搜自己的名片池。
+> 完整對照 **§11.2.3 Enterprise Publisher**。MVP **不**實作跨池搜尋；Personal Pro 仍只搜自己的名片池。
 
 | 方案 | 對象 | 核心能力 | 定價方向 |
 |------|------|----------|----------|
-| **Personal Free / Pro** | 個人業務 | 搜尋**自己的**名片池 + 資料新鮮度 | 見 §11.2 |
+| **Personal Free / Pro** | 個人業務 | 搜尋**自己的**名片池 + 資料新鮮度 | 見 **§11.2.1** |
+| **Enterprise Personal** | 團隊採購 | Pro + 更高 quota / 稽核（Pool A） | 見 **§11.2.2** |
 | **Network Explorer** | 個人（加購或高階） | 額外搜尋**授權公開商務池** | Pilot 後定 |
-| **Enterprise Publisher** | B2B 企業 | 在平台建立員工電子名片 → **自願公開** → 可被 AI 搜尋 | 企業年訂閱 |
+| **Enterprise Publisher** | B2B 企業 | 建立公開員工電子名片 → 可被搜尋 | 見 **§11.2.3** · §13 |
 
 **雙邊收費邏輯**：
 - **需求端**：付費才能搜公開池（不動 MVP 免費搜自己庫的 Aha）
@@ -440,6 +604,33 @@ M5 AI 搜尋
 - **US-6.4** 補全完成觸發 M3 職責推估 pass 2
 - **US-6.5** Pro：M1 設定自動更新過期公司資料
 - **US-6.6** 手動更新公司資訊（Free 限額 / Pro 放寬）
+
+---
+
+## 12.5 M3.5 個人 LinkedIn 補充 — PM L3 摘要（v2.3 新增）
+
+> 完整規格：`spec/modules/BSChat_PM_M35.md` · 架構：`spec/architecture/BSChat_SA-SD_M35.md`
+
+### 12.5.1 定位
+
+- **Free**：僅 M3 LLM 推估（不收外部 people search 成本）
+- **Pro / Enterprise**：在 M3 之上，可透過 **LinkedIn 公開資料 + LLM** 取得較準的個人職責摘要
+- **非**在職追蹤、**非**全庫 silent 搜 LinkedIn（DDR-75）
+
+### 12.5.2 觸發
+
+| 觸發 | Free | Pro |
+|------|------|-----|
+| 收錄後 M3 LLM pass 1/2 | ✅ | ✅ |
+| 名片/import 含 `linkedin_url` 自動 M3.5 | ❌ | ✅（預設開；可關） |
+| 詳情「LinkedIn 補充」按鈕 | ❌（升級 CTA） | ✅ 扣 monthly quota |
+| M5 結果「深入查此人」 | ❌ | ✅ 扣 quota |
+
+### 12.5.3 User Stories
+
+- **US-3.5.1** Pro 使用者希望從 LinkedIn 公開資料核對聯絡人負責範圍，以便比 LLM 推估更準地決定是否 follow-up
+- **US-3.5.2** Free 使用者仍能看到 M3 AI 推估；點 LinkedIn 功能時看到升級說明，而非錯誤
+- **US-3.5.3** 系統在 match 不確定時只顯示候選、不寫入，避免錯人
 
 ---
 
@@ -596,4 +787,4 @@ Acceptance Criteria:
 
 ---
 
-*文件版本：v2.2 | 更新：2026-05-20 | 新增：§13 授權公開商務池、Enterprise 雙邊收費、DDR-58~62*
+*文件版本：v2.3 | 更新：2026-05-20 | 新增：§11.2.1~11.2.3 方案总对照、M3.5 付費切割、Enterprise Personal / Publisher 分节*

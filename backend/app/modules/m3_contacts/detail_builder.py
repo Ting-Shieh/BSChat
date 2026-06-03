@@ -73,6 +73,7 @@ async def to_detail(db: AsyncSession, contact: Contact) -> ContactDetailResponse
 
     return ContactDetailResponse(
         id=contact.id,
+        company_id=contact.company_id,
         display_name=contact.display_name,
         company_name=contact.company_name,
         title=contact.title,

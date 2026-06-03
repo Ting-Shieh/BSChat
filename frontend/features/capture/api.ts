@@ -1,8 +1,9 @@
-import { apiFetch } from "@/shared/lib/api-client";
+import { apiFetch, ApiError } from "@/shared/lib/api-client";
 import type {
   CaptureSession,
   CardDetail,
   CardListItem,
+  ImportCardResponse,
   RawCardUploadResponse,
 } from "@/shared/types/capture";
 
@@ -86,9 +87,74 @@ export async function reviewCard(
   });
 }
 
+export async function skipReviewCard(token: string, cardId: string): Promise<CardDetail> {
+  return apiFetch(`/api/v1/cards/${cardId}/skip`, {
+    method: "POST",
+    ...auth(token),
+  });
+}
+
+export async function deleteCard(token: string, cardId: string): Promise<void> {
+  await apiFetch(`/api/v1/cards/${cardId}`, {
+    method: "DELETE",
+    ...auth(token),
+  });
+}
+
 export async function reocrCard(token: string, cardId: string): Promise<{ raw_card_id: string; status: string }> {
   return apiFetch(`/api/v1/cards/${cardId}/reocr`, {
     method: "POST",
     ...auth(token),
   });
+}
+
+function importErrorMessage(err: unknown): never {
+  if (err instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(err.message) as {
+        detail?: { code?: string; message?: string } | string;
+      };
+      const detail = parsed.detail;
+      if (detail && typeof detail === "object" && detail.message) {
+        throw new Error(detail.message);
+      }
+      if (typeof detail === "string") {
+        throw new Error(detail);
+      }
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== err.message) {
+        throw parseErr;
+      }
+    }
+    throw new Error(err.message || "匯入失敗");
+  }
+  throw err instanceof Error ? err : new Error("匯入失敗");
+}
+
+export async function importUrl(
+  token: string,
+  url: string,
+  options: { force?: boolean } = {},
+): Promise<ImportCardResponse> {
+  try {
+    return await apiFetch("/api/v1/cards/import-url", {
+      method: "POST",
+      body: JSON.stringify({ url, force: options.force ?? false }),
+      ...auth(token),
+    });
+  } catch (err) {
+    importErrorMessage(err);
+  }
+}
+
+export async function importQr(token: string, payload: string): Promise<ImportCardResponse> {
+  try {
+    return await apiFetch("/api/v1/cards/import-qr", {
+      method: "POST",
+      body: JSON.stringify({ payload }),
+      ...auth(token),
+    });
+  } catch (err) {
+    importErrorMessage(err);
+  }
 }

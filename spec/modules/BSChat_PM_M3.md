@@ -19,6 +19,8 @@
 
 **使用者不需要操作建檔** —— M2 handoff 後 Contact **自動出現**在名片庫；背景跑 inference + index。
 
+**付費分層（DDR-74）**：M3 LLM 推估为 **Free + Pro 共用**。Pro/Enterprise 的 **LinkedIn + LLM 個人補充** 由 **M3.5** 负责，见 `spec/modules/BSChat_PM_M35.md`；M3 不因付費而停用。
+
 ```
 M2 Handoff（OCR / Review）
         ↓
@@ -54,6 +56,7 @@ M5 讀 index 搜尋 · UI 三區塊詳情
 | F-3.14 | 簡單前缀搜索（列表 q） | P1 | 記得姓名 | GET /contacts?q= |
 | F-3.15 | Tags / Notes | P2 | 原 PRD | MVP 不做 |
 | F-3.16 | M4 重複提示消費 | P1 | dedup | DuplicateSuspected 事件 |
+| — | **M3.5 LinkedIn 個人補充** | Pro | DDR-74 | 见 `BSChat_PM_M35.md`；**非 M3 范围** |
 
 **明確不做（MVP）**：
 - ❌ 使用者必填備註/分類（DDR-11 在 M2）

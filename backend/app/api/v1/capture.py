@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Annotated
 
@@ -9,6 +10,7 @@ from app.core.db import get_db
 from app.core.storage import save_image, sha256_bytes
 from app.models.capture import OcrResult, RawCard
 from app.modules.m2_capture import service
+from app.modules.m2_capture.url_resolver import ImportResolveError, download_card_image, resolve_qr_payload, resolve_url_input
 from app.schemas.capture import (
     BatchUploadResponse,
     CaptureSessionResponse,
@@ -17,6 +19,9 @@ from app.schemas.capture import (
     CardListResponse,
     CreateSessionRequest,
     DuplicateWarning,
+    ImportCardResponse,
+    ImportQrRequest,
+    ImportUrlRequest,
     OcrResultSummary,
     RawCardUploadResponse,
     ReviewCardRequest,
@@ -25,6 +30,7 @@ from app.schemas.capture import (
 from app.workers.tasks.ocr import schedule_card_ocr
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _ocr_summary(ocr: OcrResult | None) -> OcrResultSummary | None:
@@ -45,6 +51,7 @@ def _card_detail(card: RawCard) -> CardDetailResponse:
         capture_session_id=card.capture_session_id,
         status=card.status,
         review_status=card.review_status,
+        review_deferred_at=card.review_deferred_at,
         version=card.version,
         image_url=card.image_url,
         capture_method=card.capture_method,
@@ -61,6 +68,7 @@ def _card_list_item(card: RawCard) -> CardListItem:
         id=card.id,
         status=card.status,
         review_status=card.review_status,
+        review_deferred_at=card.review_deferred_at,
         capture_method=card.capture_method,
         source_label=card.source_label,
         image_url=card.image_url,
@@ -137,6 +145,145 @@ async def _upload_one(
     schedule_card_ocr(card.id)
 
     return await _build_upload_response(db, user.id, card, image_hash)
+
+
+def _import_preview(fields: dict) -> dict:
+    return {
+        "name": fields.get("name"),
+        "company": fields.get("company"),
+        "title": fields.get("title"),
+    }
+
+
+async def _complete_import(
+    db: AsyncSession,
+    user: CurrentUser,
+    *,
+    capture_method: str,
+    resolved: dict,
+    idempotency_key: str | None,
+    content_for_hash: str,
+) -> ImportCardResponse:
+    from app.modules.m3_contacts.upsert import get_active_contact_by_raw_card
+
+    if idempotency_key:
+        existing = await service.get_card_by_idempotency(db, user.id, idempotency_key)
+        if existing and existing.ocr_result:
+            contact = await get_active_contact_by_raw_card(db, existing.id, user.id)
+            if contact is None:
+                try:
+                    await service.emit_handoff(db, existing)
+                except Exception as exc:
+                    raise HTTPException(status_code=500, detail="Handoff failed") from exc
+            return ImportCardResponse(
+                raw_card_id=existing.id,
+                status=existing.status,
+                review_status=existing.review_status,
+                capture_method=existing.capture_method,
+                extracted_preview=_import_preview(existing.ocr_result.extracted_fields),
+            )
+
+    content_hash = sha256_bytes(content_for_hash.encode("utf-8"))
+    card = await service.create_import_card(
+        db,
+        user=user,
+        capture_method=capture_method,
+        content_hash=content_hash,
+        idempotency_key=idempotency_key,
+    )
+    await service.save_import_result(
+        db,
+        card,
+        resolver_type=resolved["resolver_type"],
+        extracted_fields=resolved["fields"],
+        field_confidences=resolved["field_confidences"],
+        raw_text=resolved.get("raw_text", ""),
+    )
+
+    remote_image = resolved.get("image_url")
+    if remote_image:
+        try:
+            image_data, ext = await download_card_image(remote_image)
+            stored_url = await save_image(user.id, card.id, image_data, ext)
+            await service.attach_card_image(
+                db,
+                card,
+                image_url=stored_url,
+                image_hash=sha256_bytes(image_data),
+            )
+        except ImportResolveError as exc:
+            logger.warning("Import image skipped for card %s: %s", card.id, exc)
+        except Exception:
+            logger.exception("Import image failed for card %s", card.id)
+
+    card = await service.get_card(db, card.id, user.id)
+    assert card is not None
+    try:
+        await service.emit_handoff(db, card)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Handoff failed") from exc
+
+    return ImportCardResponse(
+        raw_card_id=card.id,
+        status=card.status,
+        review_status=card.review_status,
+        capture_method=card.capture_method,
+        extracted_preview=_import_preview(resolved["fields"]),
+    )
+
+
+@router.post("/cards/import-url", response_model=ImportCardResponse, status_code=201)
+async def import_url(
+    body: ImportUrlRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> ImportCardResponse:
+    try:
+        resolved = await resolve_url_input(body.url)
+    except ImportResolveError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
+
+    key = idempotency_key or sha256_bytes(body.url.strip().encode("utf-8"))[:32]
+    if body.force:
+        key = f"{key}-force-{uuid.uuid4().hex[:8]}"
+    return await _complete_import(
+        db,
+        user,
+        capture_method="url",
+        resolved=resolved,
+        idempotency_key=key,
+        content_for_hash=body.url.strip(),
+    )
+
+
+@router.post("/cards/import-qr", response_model=ImportCardResponse, status_code=201)
+async def import_qr(
+    body: ImportQrRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> ImportCardResponse:
+    payload = body.payload.strip()
+    try:
+        if payload.upper().startswith("BEGIN:VCARD"):
+            resolved = resolve_qr_payload(payload)
+        elif payload.startswith(("http://", "https://")):
+            resolved = await resolve_url_input(payload)
+        else:
+            resolved = resolve_qr_payload(payload)
+    except ImportResolveError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
+
+    key = idempotency_key or sha256_bytes(payload.encode("utf-8"))[:32]
+    return await _complete_import(
+        db,
+        user,
+        capture_method="qr",
+        resolved=resolved,
+        idempotency_key=key,
+        content_for_hash=payload,
+    )
 
 
 @router.post("/capture-sessions", response_model=CaptureSessionResponse, status_code=201)
@@ -278,6 +425,25 @@ async def review_card(
 
     await db.refresh(card, attribute_names=["ocr_result"])
     await service.emit_handoff(db, card)
+    return _card_detail(card)
+
+
+@router.post("/cards/{card_id}/skip", response_model=CardDetailResponse)
+async def skip_review(
+    card_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CardDetailResponse:
+    card = await service.get_card(db, card_id, user.id)
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    try:
+        card = await service.defer_review(db, card)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "not_pending":
+            raise HTTPException(status_code=400, detail="Card is not pending review") from exc
+        raise HTTPException(status_code=400, detail="Card is not ready for review") from exc
     return _card_detail(card)
 
 

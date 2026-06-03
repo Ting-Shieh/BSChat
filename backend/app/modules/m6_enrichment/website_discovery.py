@@ -3,8 +3,31 @@ from urllib.parse import urlparse
 
 import httpx
 
-MAX_PROBE = 3
+from app.ai.pipelines.website_discovery import infer_company_website_candidates
+
+MAX_PROBE = 8
 TIMEOUT = 5.0
+
+_SUFFIX_STOPWORDS = frozenset(
+    {"co", "ltd", "inc", "corp", "llc", "company", "group", "holdings", "technology", "tech", "limited"}
+)
+
+_GENERIC_EMAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "yahoo.com",
+        "hotmail.com",
+        "outlook.com",
+        "live.com",
+        "icloud.com",
+        "me.com",
+        "msn.com",
+        "ymail.com",
+        "proton.me",
+        "protonmail.com",
+    }
+)
 
 
 def _is_valid_url(url: str) -> bool:
@@ -21,17 +44,61 @@ def _normalize_url(url: str) -> str:
     return url.rstrip("/")
 
 
+def _website_from_email(email: str | None) -> str | None:
+    if not email or "@" not in email:
+        return None
+    domain = email.rsplit("@", 1)[-1].lower().strip()
+    if not domain or domain in _GENERIC_EMAIL_DOMAINS or "." not in domain:
+        return None
+    return f"https://www.{domain}"
+
+
+def _ascii_tokens(text: str) -> list[str]:
+    return [p.lower() for p in re.findall(r"[a-zA-Z0-9]+", text) if len(p) >= 2]
+
+
 def _slug_candidates(company_name: str) -> list[str]:
-    ascii_parts = re.findall(r"[a-zA-Z0-9]+", company_name)
-    if ascii_parts:
-        slug = "-".join(p.lower() for p in ascii_parts[:4])
-        return [slug]
-    # CJK: use first few chars as heuristic (limited)
+    names = [company_name]
+    names.extend(re.findall(r"[（(]([^）)]+)[）)]", company_name))
+
+    slugs: list[str] = []
+    seen: set[str] = set()
+
+    def add_slug(slug: str) -> None:
+        slug = slug.strip("-")
+        if slug and slug not in seen:
+            seen.add(slug)
+            slugs.append(slug)
+
+    for name in names:
+        tokens = _ascii_tokens(name)
+        meaningful = [t for t in tokens if t not in _SUFFIX_STOPWORDS]
+        if meaningful:
+            add_slug(meaningful[0])
+            if len(meaningful) > 1:
+                add_slug("-".join(meaningful[:3]))
+
+    if slugs:
+        return slugs
+
     cjk = re.sub(r"[^\u4e00-\u9fff]", "", company_name)
     if len(cjk) >= 2:
-        short = cjk[:4]
-        return [short]
+        return [cjk[:4]]
     return []
+
+
+def _heuristic_domain_candidates(company_name: str) -> list[str]:
+    candidates: list[str] = []
+    for slug in _slug_candidates(company_name):
+        candidates.extend(
+            [
+                f"https://www.{slug}.com.tw",
+                f"https://{slug}.com.tw",
+                f"https://www.{slug}.com",
+                f"https://{slug}.com",
+            ]
+        )
+    return candidates
 
 
 async def _probe_url(client: httpx.AsyncClient, url: str) -> bool:
@@ -45,31 +112,10 @@ async def _probe_url(client: httpx.AsyncClient, url: str) -> bool:
         return False
 
 
-async def discover_website(company_name: str, contact_website: str | None = None) -> str | None:
-    if contact_website and _is_valid_url(contact_website):
-        return _normalize_url(contact_website)
-
-    candidates: list[str] = []
-    for slug in _slug_candidates(company_name):
-        candidates.extend(
-            [
-                f"https://www.{slug}.com.tw",
-                f"https://{slug}.com.tw",
-                f"https://www.{slug}.com",
-                f"https://{slug}.com",
-            ]
-        )
-
-    # Known hints for common Taiwan company patterns
-    lower = company_name.lower()
-    if "amazon" in lower or "亞馬遜" in company_name:
-        candidates.insert(0, "https://aws.amazon.com")
-    if "google" in lower or "谷歌" in company_name:
-        candidates.insert(0, "https://about.google")
-
+async def _probe_first_reachable(urls: list[str]) -> str | None:
     seen: set[str] = set()
     async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "BSChatBot/1.0"}) as client:
-        for url in candidates:
+        for url in urls:
             if url in seen:
                 continue
             seen.add(url)
@@ -78,3 +124,29 @@ async def discover_website(company_name: str, contact_website: str | None = None
             if len(seen) >= MAX_PROBE:
                 break
     return None
+
+
+async def discover_website(
+    company_name: str,
+    contact_website: str | None = None,
+    contact_email: str | None = None,
+) -> str | None:
+    if contact_website and _is_valid_url(contact_website):
+        return _normalize_url(contact_website)
+
+    email_site = _website_from_email(contact_email)
+    if email_site:
+        found = await _probe_first_reachable([email_site])
+        if found:
+            return found
+
+    ai_candidates, _, _ = await infer_company_website_candidates(
+        company_name,
+        contact_email=contact_email,
+    )
+    if ai_candidates:
+        found = await _probe_first_reachable([c.url for c in ai_candidates])
+        if found:
+            return found
+
+    return await _probe_first_reachable(_heuristic_domain_candidates(company_name))

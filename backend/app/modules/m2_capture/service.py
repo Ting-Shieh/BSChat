@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.capture import CaptureSession, HandoffEvent, OcrResult, RawCard
+from app.models.contact import Contact
+from app.models.contact_search_document import ContactSearchDocument
 from app.models.user import User
 
 
@@ -64,11 +66,13 @@ async def get_card_by_idempotency(
     db: AsyncSession, user_id: uuid.UUID, idempotency_key: str
 ) -> RawCard | None:
     result = await db.execute(
-        select(RawCard).where(
+        select(RawCard)
+        .where(
             RawCard.user_id == user_id,
             RawCard.idempotency_key == idempotency_key,
             RawCard.deleted_at.is_(None),
         )
+        .options(selectinload(RawCard.ocr_result))
     )
     return result.scalar_one_or_none()
 
@@ -176,8 +180,42 @@ async def get_card(db: AsyncSession, card_id: uuid.UUID, user_id: uuid.UUID) -> 
 
 
 async def soft_delete_card(db: AsyncSession, card: RawCard) -> None:
+    if card.capture_session_id:
+        session = await db.get(CaptureSession, card.capture_session_id)
+        if session:
+            if card.review_status == "pending_review" and card.review_deferred_at is None:
+                session.pending_count = max(0, session.pending_count - 1)
+            elif card.review_status in ("auto_accepted", "confirmed"):
+                session.confirmed_count = max(0, session.confirmed_count - 1)
+
+    result = await db.execute(
+        select(Contact).where(
+            Contact.raw_card_id == card.id,
+            Contact.user_id == card.user_id,
+            Contact.deleted_at.is_(None),
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if contact:
+        contact.deleted_at = datetime.now(UTC)
+        doc = await db.get(ContactSearchDocument, contact.id)
+        if doc:
+            await db.delete(doc)
+
     card.deleted_at = datetime.now(UTC)
+    card.idempotency_key = None
     await db.commit()
+
+
+async def defer_review(db: AsyncSession, card: RawCard) -> RawCard:
+    if card.review_status != "pending_review":
+        raise ValueError("not_pending")
+    if card.status != "ocr_done":
+        raise ValueError("not_ready")
+    card.review_deferred_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(card)
+    return card
 
 
 async def count_pending_review(db: AsyncSession, user_id: uuid.UUID) -> int:
@@ -188,6 +226,7 @@ async def count_pending_review(db: AsyncSession, user_id: uuid.UUID) -> int:
             RawCard.user_id == user_id,
             RawCard.deleted_at.is_(None),
             RawCard.review_status == "pending_review",
+            RawCard.review_deferred_at.is_(None),
             RawCard.status == "ocr_done",
         )
     )
@@ -257,6 +296,7 @@ async def reset_card_for_reocr(db: AsyncSession, card: RawCard) -> None:
 
     card.status = "queued"
     card.review_status = "pending_review"
+    card.review_deferred_at = None
     await db.commit()
     await db.refresh(card)
 
@@ -287,6 +327,7 @@ async def review_card(
 
     was_pending = card.review_status == "pending_review"
     card.review_status = "confirmed"
+    card.review_deferred_at = None
     card.version += 1
 
     if was_pending and card.capture_session_id:
@@ -301,10 +342,82 @@ async def review_card(
     return card
 
 
+async def save_import_result(
+    db: AsyncSession,
+    card: RawCard,
+    *,
+    resolver_type: str,
+    extracted_fields: dict,
+    field_confidences: dict,
+    raw_text: str,
+) -> OcrResult:
+    """Persist parsed digital card fields (skips OCR worker)."""
+    review_status = review_status_from_confidences(field_confidences)
+    card.status = "ocr_done"
+    card.review_status = review_status
+
+    ocr = OcrResult(
+        raw_card_id=card.id,
+        engine="import",
+        engine_version=resolver_type,
+        raw_text=raw_text,
+        extracted_fields=extracted_fields,
+        field_confidences=field_confidences,
+        overall_confidence=sum(field_confidences.values()) / len(field_confidences)
+        if field_confidences
+        else None,
+        processed_at=datetime.now(UTC),
+        duration_ms=0,
+    )
+    db.add(ocr)
+    await db.commit()
+    await db.refresh(card)
+    await db.refresh(ocr)
+    return ocr
+
+
+async def create_import_card(
+    db: AsyncSession,
+    *,
+    user: User,
+    capture_method: str,
+    content_hash: str,
+    idempotency_key: str | None,
+) -> RawCard:
+    card = RawCard(
+        user_id=user.id,
+        workspace_id=user.workspace.id,
+        capture_method=capture_method,
+        image_url=None,
+        image_hash=content_hash,
+        status="queued",
+        idempotency_key=idempotency_key,
+    )
+    db.add(card)
+    await db.commit()
+    await db.refresh(card)
+    return card
+
+
+async def attach_card_image(
+    db: AsyncSession,
+    card: RawCard,
+    *,
+    image_url: str,
+    image_hash: str,
+) -> RawCard:
+    card.image_url = image_url
+    card.image_hash = image_hash
+    await db.commit()
+    await db.refresh(card)
+    return card
+
+
 async def emit_handoff(db: AsyncSession, card: RawCard) -> HandoffEvent:
     ocr = card.ocr_result
     fields = ocr.extracted_fields if ocr else {}
     confidences = ocr.field_confidences if ocr else {}
+    provenance_source = "import" if card.capture_method in ("url", "qr") else "ocr"
     payload = {
         "eventId": str(uuid.uuid4()),
         "userId": str(card.user_id),
@@ -312,7 +425,7 @@ async def emit_handoff(db: AsyncSession, card: RawCard) -> HandoffEvent:
         "rawCardId": str(card.id),
         "fields": fields,
         "fieldConfidences": confidences,
-        "provenance": {"source": "ocr", "sourceRef": str(card.id)},
+        "provenance": {"source": provenance_source, "sourceRef": str(card.id)},
         "sourceType": card.source_type,
         "sourceLabel": card.source_label,
         "captureMethod": card.capture_method,

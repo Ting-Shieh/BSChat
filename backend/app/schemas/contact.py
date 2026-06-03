@@ -62,8 +62,24 @@ class ContactSections(BaseModel):
     company_enrichment: CompanyEnrichmentSection
 
 
+class ContactUpdateFields(BaseModel):
+    display_name: str | None = None
+    company_name: str | None = None
+    title: str | None = None
+    address: str | None = None
+    website: str | None = None
+    phone: str | None = None
+    email: str | None = None
+
+
+class ContactUpdateRequest(BaseModel):
+    fields: ContactUpdateFields
+    version: int
+
+
 class ContactDetailResponse(BaseModel):
     id: UUID
+    company_id: UUID | None = None
     display_name: str | None
     company_name: str | None
     title: str | None

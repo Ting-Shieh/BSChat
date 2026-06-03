@@ -1,15 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCopyContact, CopyToast } from "@/features/actions";
 import { useAuthStore } from "@/features/auth/store";
 import { CompanyEnrichmentBlock } from "@/features/enrichment";
+import { useReEnrichCompany } from "@/features/enrichment/hooks";
 import { SearchContextBanner, useSearchResultContext } from "@/features/search";
 import { ConfidenceDot } from "@/shared/components/ConfidenceDot";
 import { PrivacyStrip } from "@/shared/components/PrivacyStrip";
 import type { ContactDetail } from "@/shared/types/contact";
+import { ContactEditSheet } from "./ContactEditSheet";
 import * as contactsApi from "../api";
 
 export function ContactDetailPage({
@@ -26,6 +29,58 @@ export function ContactDetailPage({
   const queryClient = useQueryClient();
   const { copy, message } = useCopyContact();
   const { data: searchContext } = useSearchResultContext(fromSearch, contact.id);
+  const reEnrich = useReEnrichCompany(contact.id);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [localContact, setLocalContact] = useState(contact);
+
+  useEffect(() => {
+    setLocalContact(contact);
+  }, [contact]);
+
+  const saveEdit = useMutation({
+    mutationFn: (fields: contactsApi.ContactUpdateFields) =>
+      contactsApi.updateContact(token!, localContact.id, {
+        version: localContact.version,
+        fields,
+      }),
+    onSuccess: (updated) => {
+      setLocalContact(updated);
+      setEditOpen(false);
+      setEditError(null);
+      queryClient.setQueryData(["contact", contact.id], updated);
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "儲存失敗";
+      if (msg.includes("CONTACT_VERSION_CONFLICT")) {
+        setEditError("資料已被更新，請關閉後重新整理再編輯");
+      } else {
+        setEditError("無法儲存，請稍後再試");
+      }
+    },
+  });
+
+  const handleRefreshCompany = () => {
+    if (!localContact.company_id) return;
+    setRefreshError(null);
+    reEnrich.mutate(
+      { companyId: localContact.company_id },
+      {
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : "更新失敗";
+          if (msg.includes("MANUAL_REFRESH_QUOTA_EXCEEDED")) {
+            setRefreshError("本月手動更新次數已用完");
+          } else if (msg.includes("ENRICH_IN_PROGRESS")) {
+            setRefreshError("公司資訊正在更新中");
+          } else {
+            setRefreshError("無法更新公司資訊，請稍後再試");
+          }
+        },
+      },
+    );
+  };
 
   const remove = useMutation({
     mutationFn: () => contactsApi.deleteContact(token!, contact.id),
@@ -35,10 +90,10 @@ export function ContactDetailPage({
     },
   });
 
-  const original = contact.sections.card_original;
-  const ai = contact.sections.ai_inferred.responsibility_scope;
-  const phone = contact.phones?.[0]?.value;
-  const email = contact.emails?.[0]?.value;
+  const original = localContact.sections.card_original;
+  const ai = localContact.sections.ai_inferred.responsibility_scope;
+  const phone = localContact.phones?.[0]?.value;
+  const email = localContact.emails?.[0]?.value;
 
   return (
     <main className="flex flex-col gap-4 p-4">
@@ -46,14 +101,26 @@ export function ContactDetailPage({
         <Link href="/contacts" className="text-sm text-[var(--color-primary)]">
           ← 名片庫
         </Link>
-        <button
-          type="button"
-          onClick={() => remove.mutate()}
-          disabled={remove.isPending}
-          className="text-xs text-[var(--color-error)]"
-        >
-          刪除
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setEditError(null);
+              setEditOpen(true);
+            }}
+            className="text-xs font-medium text-[var(--color-primary)]"
+          >
+            編輯
+          </button>
+          <button
+            type="button"
+            onClick={() => remove.mutate()}
+            disabled={remove.isPending}
+            className="text-xs text-[var(--color-error)]"
+          >
+            刪除
+          </button>
+        </div>
       </div>
 
       {fromSearch && (
@@ -128,13 +195,30 @@ export function ContactDetailPage({
         </section>
       )}
 
-      <CompanyEnrichmentBlock enrichment={contact.sections.company_enrichment} />
+      <CompanyEnrichmentBlock
+        enrichment={localContact.sections.company_enrichment}
+        companyId={localContact.company_id}
+        onRefresh={localContact.company_id ? handleRefreshCompany : undefined}
+        refreshPending={reEnrich.isPending}
+        refreshError={refreshError}
+      />
 
-      {contact.source_label && (
-        <p className="text-center text-xs text-[var(--color-text-tertiary)]">來源：{contact.source_label}</p>
+      {localContact.source_label && (
+        <p className="text-center text-xs text-[var(--color-text-tertiary)]">
+          來源：{localContact.source_label}
+        </p>
       )}
       <PrivacyStrip className="text-center" />
       <CopyToast message={message} />
+
+      <ContactEditSheet
+        contact={localContact}
+        open={editOpen}
+        saving={saveEdit.isPending}
+        error={editError}
+        onClose={() => setEditOpen(false)}
+        onSave={(fields) => saveEdit.mutate(fields)}
+      />
     </main>
   );
 }

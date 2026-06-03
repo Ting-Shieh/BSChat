@@ -1,16 +1,16 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser
 from app.core.db import get_db
-from app.modules.m6_enrichment.section_builder import build_enrichment_section
-from app.schemas.company import CompanyDetailResponse
-from sqlalchemy import select
-
 from app.models.company import Company, CompanyEnrichment
+from app.modules.m6_enrichment.manual_refresh import request_manual_re_enrich
+from app.modules.m6_enrichment.section_builder import build_enrichment_section
+from app.schemas.company import CompanyDetailResponse, ReEnrichResponse
 
 router = APIRouter()
 
@@ -46,3 +46,16 @@ async def get_company(
         enrichment=section,
         latest_enrichment_version=latest.enrich_version if latest else 0,
     )
+
+
+@router.post("/companies/{company_id}/re-enrich", response_model=ReEnrichResponse)
+async def re_enrich_company(
+    company_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    contact_id: uuid.UUID | None = Query(default=None),
+) -> ReEnrichResponse:
+    result = await request_manual_re_enrich(
+        db, user, company_id, contact_id=contact_id
+    )
+    return ReEnrichResponse(**result)

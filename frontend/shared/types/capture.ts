@@ -24,6 +24,7 @@ export interface CardListItem {
   id: string;
   status: string;
   review_status: string;
+  review_deferred_at: string | null;
   capture_method: string;
   source_label: string | null;
   image_url: string | null;
@@ -49,6 +50,19 @@ export interface RawCardUploadResponse {
   status: string;
   capture_session_id: string | null;
   duplicate_warning?: DuplicateWarning | null;
+}
+
+export interface ImportCardResponse {
+  raw_card_id: string;
+  status: string;
+  review_status: string;
+  capture_method: string;
+  message: string;
+  extracted_preview?: {
+    name?: string | null;
+    company?: string | null;
+    title?: string | null;
+  } | null;
 }
 
 export type ThumbnailStatus = "uploading" | "queued" | "ocr_processing" | "ocr_done" | "ocr_failed" | "upload_failed";

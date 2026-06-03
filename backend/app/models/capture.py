@@ -48,6 +48,7 @@ class RawCard(Base):
     source_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="uploading")
     review_status: Mapped[str] = mapped_column(String(20), default="pending_review")
+    review_deferred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

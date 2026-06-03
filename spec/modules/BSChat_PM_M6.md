@@ -36,11 +36,9 @@
 
 **明确不做（MVP）**：
 - ❌ 人員在職狀態追蹤（DDR-33）
-- ❌ 即時 HR / LinkedIn 同步
+- ❌ **個人 LinkedIn 搜尋 / 同步**（改由 **M3.5** Pro/Enterprise 負責；M6 僅公司官網 enrich）
 
 ---
-
-## L3.2 — 三層資料新鮮度策略
 
 ```
 Layer 1 — Cache-at-ingest（M6，P0，Free+Pro）
@@ -78,6 +76,7 @@ M6 Worker
     → contacts.company_id
     → CompanyEnriched（若 DDR-31 条件满足）
 M3：inference pass 2 + re-index
+M3.5（Pro）：LinkedIn 個人補充 — 见 `BSChat_PM_M35.md`；**不经过 M6 pipeline**
 M3 详情：company_enrichment 区块（已有 UIUX spec）
 ```
 

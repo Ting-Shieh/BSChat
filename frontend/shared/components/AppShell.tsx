@@ -22,12 +22,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrated = useAuthHydrated();
   const token = useAuthStore((s) => s.token);
   const logout = useLogout();
-  const { data: me } = useMe();
+  const { data: me, isError: meError } = useMe();
   const { data: pending } = usePendingCount();
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
   }, [hydrated, token, router]);
+
+  useEffect(() => {
+    if (meError) {
+      logout();
+      router.replace("/login");
+    }
+  }, [meError, logout, router]);
 
   if (!hydrated) {
     return (

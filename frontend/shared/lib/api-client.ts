@@ -10,6 +10,17 @@ export class ApiError extends Error {
   }
 }
 
+function handleUnauthorized() {
+  if (typeof window === "undefined") return;
+  // 動態 import 避免 SSR 循環依賴
+  void import("@/features/auth/store").then(({ useAuthStore }) => {
+    useAuthStore.getState().logout();
+    if (!window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+  });
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string; json?: boolean } = {},
@@ -27,6 +38,9 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 401) {
+      handleUnauthorized();
+    }
     throw new ApiError(res.status, body || res.statusText);
   }
 

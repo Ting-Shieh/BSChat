@@ -52,16 +52,34 @@ class Settings(BaseSettings):
     # Search (M5)
     search_provider: str = "gemini"
     search_use_mock: bool = False
+    import_use_mock: bool = False
     search_skip_intent_parse: bool = False
     gemini_search_model: str = "gemini-2.5-flash"
+    gemini_import_model: str = "gemini-2.5-flash"
     search_rerank_model: str = "claude-sonnet-4-20250514"
     search_result_limit: int = 10
     search_retrieval_limit: int = 50
+
+    # M3 responsibility inference
+    inference_use_mock: bool = False
+    inference_provider: str = "gemini"
+    gemini_inference_model: str = "gemini-2.5-flash"
+    inference_model: str = "claude-sonnet-4-20250514"
 
     @property
     def effective_search_provider(self) -> str:
         if self.search_provider != "mock":
             return self.search_provider
+        if self.gemini_api_key:
+            return "gemini"
+        if self.anthropic_api_key:
+            return "claude"
+        return "mock"
+
+    @property
+    def effective_inference_provider(self) -> str:
+        if self.inference_provider != "mock":
+            return self.inference_provider
         if self.gemini_api_key:
             return "gemini"
         if self.anthropic_api_key:
@@ -106,6 +124,13 @@ class Settings(BaseSettings):
         if self.search_use_mock:
             return False
         return bool(self.gemini_api_key) or bool(self.anthropic_api_key)
+
+    @property
+    def import_will_use_llm(self) -> bool:
+        """Gemini for digital card URL HTML extraction (off when IMPORT_USE_MOCK=true)."""
+        if self.import_use_mock:
+            return False
+        return bool(self.gemini_api_key)
 
     @property
     def cors_origin_list(self) -> list[str]:

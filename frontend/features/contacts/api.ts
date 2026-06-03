@@ -23,3 +23,25 @@ export async function getContact(token: string, contactId: string): Promise<Cont
 export async function deleteContact(token: string, contactId: string): Promise<void> {
   return apiFetch(`/api/v1/contacts/${contactId}`, { method: "DELETE", ...auth(token) });
 }
+
+export type ContactUpdateFields = {
+  display_name?: string;
+  company_name?: string;
+  title?: string;
+  address?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+};
+
+export async function updateContact(
+  token: string,
+  contactId: string,
+  body: { version: number; fields: ContactUpdateFields },
+): Promise<ContactDetail> {
+  return apiFetch(`/api/v1/contacts/${contactId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    ...auth(token),
+  });
+}

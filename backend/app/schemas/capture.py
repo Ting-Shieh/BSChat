@@ -57,6 +57,7 @@ class CardListItem(BaseModel):
     id: UUID
     status: str
     review_status: str
+    review_deferred_at: datetime | None = None
     capture_method: str
     source_label: str | None
     image_url: str | None
@@ -75,6 +76,7 @@ class CardDetailResponse(BaseModel):
     capture_session_id: UUID | None
     status: str
     review_status: str
+    review_deferred_at: datetime | None = None
     version: int
     image_url: str | None
     capture_method: str
@@ -91,6 +93,24 @@ class ReviewCardRequest(BaseModel):
     company: str | None = None
     title: str | None = None
     version: int
+
+
+class ImportUrlRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    force: bool = False
+
+
+class ImportQrRequest(BaseModel):
+    payload: str = Field(min_length=1, max_length=16384)
+
+
+class ImportCardResponse(BaseModel):
+    raw_card_id: UUID
+    status: str
+    review_status: str
+    capture_method: str
+    message: str = "已收進名片庫，之後可搜尋"
+    extracted_preview: dict | None = None
 
 
 class BatchUploadResponse(BaseModel):
