@@ -39,8 +39,49 @@ class CardOriginalSection(BaseModel):
     image_url: str | None
 
 
+class PersonEnrichSection(BaseModel):
+    """M3.5 person scope (Pro). status drives the UI state."""
+
+    status: str = "never"  # never | locked | pending | completed | insufficient | needs_confirmation | rejected
+    is_pro: bool = False
+    person_scope: str | None = None
+    confidence: float | None = None
+    data_source: str | None = None  # linkedin_profile | linkedin_search | linkedin_url_public | card_inference
+    message: str | None = None
+    has_m3_fallback: bool = False
+    provenance_label: str | None = None
+    headline: str | None = None
+    updated_at: str | None = None
+    candidates: list[dict] | None = None
+    quota_remaining: int | None = None
+    can_enrich: bool = False
+    has_linkedin_url: bool = False
+
+
 class AiInferredSection(BaseModel):
     responsibility_scope: dict | None = None
+    person_enrich: PersonEnrichSection | None = None
+
+
+class PersonEnrichRequest(BaseModel):
+    confirm_candidate_index: int | None = None
+
+
+class PersonEnrichConfirmRequest(BaseModel):
+    candidate_index: int
+
+
+class PersonEnrichResponse(BaseModel):
+    status: str
+    person_scope: str | None = None
+    confidence: float | None = None
+    match_score: float | None = None
+    candidates: list[dict] | None = None
+    quota_remaining: int | None = None
+    data_source: str | None = None
+    message: str | None = None
+    provenance_label: str | None = None
+    error_code: str | None = None
 
 
 class CompanyEnrichmentSection(BaseModel):
@@ -70,6 +111,8 @@ class ContactUpdateFields(BaseModel):
     website: str | None = None
     phone: str | None = None
     email: str | None = None
+    linkedin_url: str | None = None
+    person_scope: str | None = None
 
 
 class ContactUpdateRequest(BaseModel):
@@ -87,6 +130,7 @@ class ContactDetailResponse(BaseModel):
     emails: list
     address: str | None
     website: str | None
+    linkedin_url: str | None = None
     source_type: str | None
     source_label: str | None
     review_status: str

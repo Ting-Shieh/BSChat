@@ -2,27 +2,81 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import type { PlanTier } from "@/shared/types/auth";
+import { cn } from "@/shared/lib/cn";
 import { useDevLogin } from "../hooks";
 
 const inputClass =
   "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]";
 
+const PLAN_OPTIONS: { id: PlanTier; label: string; hint: string }[] = [
+  { id: "free", label: "Free", hint: "M3 推估 · 公司補全 · 有限額度" },
+  { id: "pro", label: "Pro", hint: "含 LinkedIn 補充 · 較高配額" },
+];
+
+/** 各方案預設 dev 帳號（分開 email 才有獨立聯絡人與額度） */
+const DEV_ACCOUNT_BY_PLAN: Record<PlanTier, { email: string; displayName: string }> = {
+  free: { email: "dev-free@example.com", displayName: "Dev (Free)" },
+  pro: { email: "dev-pro@example.com", displayName: "Dev (Pro)" },
+  enterprise: { email: "dev-enterprise@example.com", displayName: "Dev (Enterprise)" },
+};
+
 export function LoginForm() {
   const router = useRouter();
   const login = useDevLogin();
-  const [email, setEmail] = useState("dev@example.com");
-  const [displayName, setDisplayName] = useState("Dev User");
+  const [planTier, setPlanTier] = useState<PlanTier>("free");
+  const [email, setEmail] = useState(DEV_ACCOUNT_BY_PLAN.free.email);
+  const [displayName, setDisplayName] = useState(DEV_ACCOUNT_BY_PLAN.free.displayName);
+
+  function selectPlan(tier: PlanTier) {
+    setPlanTier(tier);
+    const preset = DEV_ACCOUNT_BY_PLAN[tier];
+    setEmail(preset.email);
+    setDisplayName(preset.displayName);
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     login.mutate(
-      { email, display_name: displayName },
+      { email, display_name: displayName, plan_tier: planTier },
       { onSuccess: () => router.push("/contacts") },
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
+      <div>
+        <p className="mb-2 text-sm font-medium text-[var(--color-text-primary)]">方案（開發用）</p>
+        <div className="grid grid-cols-2 gap-2">
+          {PLAN_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => selectPlan(opt.id)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left transition-colors",
+                planTier === opt.id
+                  ? "border-[var(--color-primary)] bg-[var(--color-ai-bg)]"
+                  : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-text-tertiary)]",
+              )}
+            >
+              <span
+                className={cn(
+                  "block text-sm font-medium",
+                  planTier === opt.id
+                    ? "text-[var(--color-primary)]"
+                    : "text-[var(--color-text-secondary)]",
+                )}
+              >
+                {opt.label}
+              </span>
+              <span className="mt-0.5 block text-[10px] leading-tight text-[var(--color-text-tertiary)]">
+                {opt.hint}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
       <div>
         <label htmlFor="email" className="mb-1 block text-sm text-[var(--color-text-secondary)]">
           Email

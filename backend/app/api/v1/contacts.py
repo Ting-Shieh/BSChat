@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import CurrentUser
 from app.core.db import get_db
 from app.models.company import Company, CompanyEnrichment
+from app.modules.m3_5_person.service import (
+    get_status as person_enrich_status,
+    reject_person_enrich,
+    start_person_enrich,
+)
 from app.modules.m3_contacts.detail_builder import to_detail, to_list_item
 from app.modules.m3_contacts.upsert import (
     get_contact,
@@ -20,6 +25,9 @@ from app.schemas.contact import (
     ContactDetailResponse,
     ContactListResponse,
     ContactUpdateRequest,
+    PersonEnrichConfirmRequest,
+    PersonEnrichRequest,
+    PersonEnrichResponse,
 )
 
 router = APIRouter()
@@ -57,7 +65,7 @@ async def get_contact_detail(
     contact = await get_contact(db, contact_id, user.id)
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    return await to_detail(db, contact)
+    return await to_detail(db, contact, entitlement=user.entitlement)
 
 
 @router.patch("/contacts/{contact_id}", response_model=ContactDetailResponse)
@@ -83,6 +91,8 @@ async def patch_contact(
         "website": "website",
         "phone": "phone",
         "email": "email",
+        "linkedin_url": "linkedin_url",
+        "person_scope": "person_scope",
     }
     updates = {field_map[k]: v for k, v in payload.items() if k in field_map}
 
@@ -91,11 +101,12 @@ async def patch_contact(
         contact,
         fields=updates,
         expected_version=body.version,
+        entitlement=user.entitlement,
     )
     updated = await get_contact(db, contact_id, user.id)
     if not updated:
         raise HTTPException(status_code=404, detail="Contact not found")
-    return await to_detail(db, updated)
+    return await to_detail(db, updated, entitlement=user.entitlement)
 
 
 @router.delete("/contacts/{contact_id}", status_code=204)
@@ -108,6 +119,68 @@ async def delete_contact(
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     await soft_delete_contact(db, contact)
+
+
+@router.post(
+    "/contacts/{contact_id}/person-enrich",
+    response_model=PersonEnrichResponse,
+    summary="M3.5 trigger LinkedIn person enrichment (Pro)",
+)
+async def trigger_person_enrich(
+    contact_id: uuid.UUID,
+    body: PersonEnrichRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PersonEnrichResponse:
+    result = await start_person_enrich(
+        db, user, contact_id, confirm_candidate_index=body.confirm_candidate_index
+    )
+    return PersonEnrichResponse(**result)
+
+
+@router.get(
+    "/contacts/{contact_id}/person-enrich/status",
+    response_model=PersonEnrichResponse,
+    summary="M3.5 person enrichment status (Pro)",
+)
+async def get_person_enrich_status(
+    contact_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PersonEnrichResponse:
+    result = await person_enrich_status(db, contact_id, user.id)
+    return PersonEnrichResponse(**result)
+
+
+@router.post(
+    "/contacts/{contact_id}/person-enrich/confirm",
+    response_model=PersonEnrichResponse,
+    summary="M3.5 confirm a disambiguation candidate (Pro)",
+)
+async def confirm_person_enrich(
+    contact_id: uuid.UUID,
+    body: PersonEnrichConfirmRequest,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PersonEnrichResponse:
+    result = await start_person_enrich(
+        db, user, contact_id, confirm_candidate_index=body.candidate_index
+    )
+    return PersonEnrichResponse(**result)
+
+
+@router.post(
+    "/contacts/{contact_id}/person-enrich/reject",
+    response_model=PersonEnrichResponse,
+    summary="M3.5 reject person enrichment / 'not this person' (Pro)",
+)
+async def reject_person_enrich_endpoint(
+    contact_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PersonEnrichResponse:
+    result = await reject_person_enrich(db, user, contact_id)
+    return PersonEnrichResponse(**result)
 
 
 async def _batch_list_enrichment(db: AsyncSession, contacts: list) -> dict:

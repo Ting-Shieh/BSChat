@@ -27,6 +27,37 @@ export interface CompanyEnrichmentSection {
   needs_review?: boolean | null;
 }
 
+export interface PersonEnrichCandidate {
+  index: number;
+  linkedin_url?: string | null;
+  headline?: string | null;
+  match_score?: number;
+}
+
+export type PersonScopeDataSource =
+  | "linkedin_profile"
+  | "linkedin_search"
+  | "card_inference"
+  | "linkedin_url_public"
+  | "user_manual"
+  | string;
+
+export interface PersonEnrichSection {
+  status: string;
+  is_pro: boolean;
+  person_scope?: string | null;
+  confidence?: number | null;
+  data_source?: PersonScopeDataSource | null;
+  message?: string | null;
+  has_m3_fallback?: boolean;
+  provenance_label?: string | null;
+  updated_at?: string | null;
+  candidates?: PersonEnrichCandidate[] | null;
+  quota_remaining?: number | null;
+  can_enrich?: boolean;
+  has_linkedin_url?: boolean;
+}
+
 export interface ProvenanceField {
   name: string;
   value: string | null;
@@ -44,6 +75,7 @@ export interface ContactDetail {
   emails: Array<{ value: string; primary?: boolean }>;
   address: string | null;
   website: string | null;
+  linkedin_url?: string | null;
   source_type: string | null;
   source_label: string | null;
   review_status: string;
@@ -53,7 +85,10 @@ export interface ContactDetail {
   updated_at: string;
   sections: {
     card_original: { fields: ProvenanceField[]; image_url: string | null };
-    ai_inferred: { responsibility_scope: Record<string, unknown> | null };
+    ai_inferred: {
+      responsibility_scope: Record<string, unknown> | null;
+      person_enrich?: PersonEnrichSection | null;
+    };
     company_enrichment: CompanyEnrichmentSection;
   };
 }

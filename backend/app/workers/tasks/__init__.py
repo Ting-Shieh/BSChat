@@ -1,1 +1,8 @@
-from app.workers.tasks import contact_index, contact_inference, enrich, ocr  # noqa: F401
+from app.workers.tasks import (  # noqa: F401
+    contact_index,
+    contact_inference,
+    enrich,
+    ocr,
+    person_enrich,
+    stale_refresh,
+)

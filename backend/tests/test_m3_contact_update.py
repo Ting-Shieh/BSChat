@@ -98,3 +98,99 @@ END:VCARD"""
             json={"version": version, "fields": {"display_name": "衝突測試"}},
         )
         assert conflict.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_patch_person_scope_manual_pro(monkeypatch):
+    monkeypatch.setattr("app.modules.m3_contacts.upsert.enqueue_contact_index", lambda _id: None)
+    monkeypatch.setattr("app.modules.m3_contacts.upsert.enqueue_contact_inference", lambda *_a, **_k: None)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        token = await _login(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        plan = await client.post("/api/v1/me/plan", headers=headers, json={"plan_tier": "pro"})
+        assert plan.status_code == 200
+
+        vcard = """BEGIN:VCARD
+VERSION:3.0
+FN:手動職責
+ORG:測試公司
+TITLE:經理
+END:VCARD"""
+        imp = await client.post(
+            "/api/v1/cards/import-qr",
+            json={"payload": vcard},
+            headers={**headers, "Idempotency-Key": f"scope-{uuid.uuid4()}"},
+        )
+        assert imp.status_code == 201
+        await client.patch(
+            f"/api/v1/cards/{imp.json()['raw_card_id']}/review",
+            headers=headers,
+            json={"name": "手動職責", "company": "測試公司", "title": "經理", "version": 1},
+        )
+        contact_id = (await client.get("/api/v1/contacts", headers=headers)).json()["items"][0]["id"]
+        detail = await client.get(f"/api/v1/contacts/{contact_id}", headers=headers)
+        version = detail.json()["version"]
+
+        resp = await client.patch(
+            f"/api/v1/contacts/{contact_id}",
+            headers=headers,
+            json={
+                "version": version,
+                "fields": {"person_scope": "企業 SSD 與記憶體通路"},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        pe = data["sections"]["ai_inferred"]["person_enrich"]
+        assert pe["status"] == "completed"
+        assert pe["person_scope"] == "可能負責企業 SSD 與記憶體通路"
+        assert pe["data_source"] == "user_manual"
+        assert pe["provenance_label"] == "✎ 使用者筆記"
+
+        cleared = await client.patch(
+            f"/api/v1/contacts/{contact_id}",
+            headers=headers,
+            json={"version": data["version"], "fields": {"person_scope": ""}},
+        )
+        assert cleared.status_code == 200, cleared.text
+        pe2 = cleared.json()["sections"]["ai_inferred"]["person_enrich"]
+        assert pe2["status"] in ("never", "insufficient")
+        assert not pe2.get("person_scope")
+
+
+@pytest.mark.asyncio
+async def test_patch_person_scope_blocked_on_free():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        token = await _login(client)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        vcard = """BEGIN:VCARD
+VERSION:3.0
+FN:Free Scope
+ORG:Co
+TITLE:Mgr
+END:VCARD"""
+        imp = await client.post(
+            "/api/v1/cards/import-qr",
+            json={"payload": vcard},
+            headers={**headers, "Idempotency-Key": f"free-scope-{uuid.uuid4()}"},
+        )
+        await client.patch(
+            f"/api/v1/cards/{imp.json()['raw_card_id']}/review",
+            headers=headers,
+            json={"name": "Free Scope", "company": "Co", "title": "Mgr", "version": 1},
+        )
+        contact_id = (await client.get("/api/v1/contacts", headers=headers)).json()["items"][0]["id"]
+        version = (await client.get(f"/api/v1/contacts/{contact_id}", headers=headers)).json()["version"]
+
+        resp = await client.patch(
+            f"/api/v1/contacts/{contact_id}",
+            headers=headers,
+            json={"version": version, "fields": {"person_scope": "測試"}},
+        )
+        assert resp.status_code == 403
+

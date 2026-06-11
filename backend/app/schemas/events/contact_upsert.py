@@ -12,6 +12,7 @@ class ContactUpsertFields(BaseModel):
     emails: list[str] = Field(default_factory=list)
     address: str | None = None
     website: str | None = None
+    linkedin_url: str | None = None
 
 
 class ContactUpsertRequested(BaseModel):

@@ -7,6 +7,7 @@ from app.ai.gemini_client import gemini_generate_text
 from app.core.config import get_settings
 from app.modules.m2_capture.structured_html import (
     extract_href_contacts,
+    extract_link_hints,
     extract_profile_image_url,
     html_to_visible_text,
 )
@@ -19,6 +20,9 @@ Page URL: {page_url}
 
 Known mailto/tel hints from HTML (may be incomplete):
 {href_hints}
+
+Link hints from page hrefs (maps / official website — may be company HQ not personal):
+{link_hints}
 
 Visible page text (truncated):
 {visible_text}
@@ -88,12 +92,15 @@ def _build_result(parsed: dict, page_url: str, resolver_type: str) -> dict:
 
 async def extract_contact_from_html(html_text: str, page_url: str) -> dict:
     emails, phones = extract_href_contacts(html_text)
+    link_hints = extract_link_hints(html_text)
     href_hints = json.dumps({"emails": emails, "phones": phones}, ensure_ascii=False)
+    link_hints_json = json.dumps(link_hints, ensure_ascii=False)
     visible = html_to_visible_text(html_text)
 
     prompt = EXTRACT_PROMPT.format(
         page_url=page_url,
         href_hints=href_hints,
+        link_hints=link_hints_json,
         visible_text=visible,
     )
     text = await gemini_generate_text(prompt, model=settings.gemini_import_model, timeout=45.0)
@@ -105,6 +112,7 @@ async def extract_contact_from_html(html_text: str, page_url: str) -> dict:
             parsed["image_url"] = fallback_image
 
     result = _build_result(parsed, page_url, "llm_html")
+    _merge_link_hints(result["fields"], link_hints)
     if not any(
         [
             result["fields"]["name"],
@@ -117,9 +125,17 @@ async def extract_contact_from_html(html_text: str, page_url: str) -> dict:
     return result
 
 
+def _merge_link_hints(fields: dict, link_hints: dict) -> None:
+    if not fields.get("address") and link_hints.get("addresses"):
+        fields["address"] = link_hints["addresses"][0]
+    if not fields.get("website") and link_hints.get("websites"):
+        fields["website"] = link_hints["websites"][0]
+
+
 def extract_contact_fallback(html_text: str, page_url: str) -> dict:
     """Offline fallback: href + visible text heuristics only (no vendor adapters)."""
     emails, phones = extract_href_contacts(html_text)
+    link_hints = extract_link_hints(html_text)
     image_url = extract_profile_image_url(html_text)
     visible = html_to_visible_text(html_text)
 
@@ -135,9 +151,10 @@ def extract_contact_fallback(html_text: str, page_url: str) -> dict:
         "title": None,
         "phones": phones,
         "emails": emails,
-        "address": None,
-        "website": page_url,
+        "address": link_hints["addresses"][0] if link_hints.get("addresses") else None,
+        "website": link_hints["websites"][0] if link_hints.get("websites") else page_url,
     }
+    _merge_link_hints(fields, link_hints)
     if not any([name, phones, emails]):
         raise ValueError("EMPTY_FALLBACK")
 
@@ -148,6 +165,11 @@ def extract_contact_fallback(html_text: str, page_url: str) -> dict:
         confidences["phones"] = 0.65
     if emails:
         confidences["emails"] = 0.65
+
+    if fields.get("address"):
+        confidences["address"] = 0.65
+    if fields.get("website"):
+        confidences["website"] = 0.65
 
     result = {
         "fields": fields,

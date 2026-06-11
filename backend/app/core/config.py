@@ -66,6 +66,18 @@ class Settings(BaseSettings):
     gemini_inference_model: str = "gemini-2.5-flash"
     inference_model: str = "claude-sonnet-4-20250514"
 
+    # M3.5 person enrichment (Pro: LinkedIn + LLM)
+    person_enrich_use_mock: bool = False
+    person_enrich_provider: str = "gemini"  # gemini | claude | mock (LLM summarize)
+    person_search_provider: str = "mock"  # mock | linkedin (official API, not wired yet)
+    person_linkedin_web_fallback: bool = True  # Gemini Google Search for user-provided LinkedIn URLs
+    gemini_person_model: str = "gemini-2.5-flash"
+    person_enrich_model: str = "claude-sonnet-4-20250514"
+    person_match_gate: float = 0.8
+    person_confidence_gate: float = 0.75  # linkedin_url | people_api
+    person_confidence_gate_web: float = 0.70  # web_search on known LinkedIn URL
+    person_confidence_gate_card: float = 0.65  # card_inference fallback
+
     @property
     def effective_search_provider(self) -> str:
         if self.search_provider != "mock":
@@ -90,6 +102,16 @@ class Settings(BaseSettings):
     def effective_enrich_provider(self) -> str:
         if self.enrich_provider != "mock":
             return self.enrich_provider
+        if self.gemini_api_key:
+            return "gemini"
+        if self.anthropic_api_key:
+            return "claude"
+        return "mock"
+
+    @property
+    def effective_person_enrich_provider(self) -> str:
+        if self.person_enrich_provider != "mock":
+            return self.person_enrich_provider
         if self.gemini_api_key:
             return "gemini"
         if self.anthropic_api_key:

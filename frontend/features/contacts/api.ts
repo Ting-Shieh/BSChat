@@ -32,6 +32,8 @@ export type ContactUpdateFields = {
   website?: string;
   phone?: string;
   email?: string;
+  linkedin_url?: string;
+  person_scope?: string;
 };
 
 export async function updateContact(

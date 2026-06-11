@@ -51,6 +51,12 @@ class UserEntitlement(Base):
     daily_enrich_used: Mapped[int] = mapped_column(Integer, default=0)
     daily_enrich_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     manual_refresh_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # M3.5 person enrichment (Pro)
+    person_enrich_mode: Mapped[str] = mapped_column(String(20), default="inference_only")
+    person_linkedin_quota_monthly: Mapped[int] = mapped_column(Integer, default=0)
+    person_linkedin_used_this_month: Mapped[int] = mapped_column(Integer, default=0)
+    person_linkedin_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    person_linkedin_auto_on_url: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

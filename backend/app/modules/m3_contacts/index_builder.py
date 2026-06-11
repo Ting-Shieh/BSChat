@@ -35,11 +35,17 @@ def _emails_text(emails: list) -> str:
 
 async def build_search_text(db: AsyncSession, contact: Contact) -> str:
     products, _ = await _latest_products(db, contact.company_id)
+    # M3.5: only index person_scope when it passed the confidence gate (R-35.2/R-35.3).
+    person_scope = ""
+    if contact.person_scope and (contact.person_scope_confidence or 0) >= 0.75:
+        person_scope = contact.person_scope
+
     parts = [
         contact.display_name or "",
         contact.company_name or "",
         contact.title or "",
         contact.responsibility_scope or "",
+        person_scope,
         contact.source_label or "",
         _phones_text(contact.phones or []),
         _emails_text(contact.emails or []),

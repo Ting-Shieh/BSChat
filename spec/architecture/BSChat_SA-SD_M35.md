@@ -1,7 +1,10 @@
 # BSChat SA/SD — Module 3.5：個人公開資料補充（LinkedIn + LLM）
 
-> **依據**：`BSChat_PM_M35.md`、DDR-74/75/76、M3/M1/M5 契約  
-> **架構模式**：Modular Monolith + 背景 worker（同 M6 enrich）
+> **依據**：`BSChat_PM_M35.md`、DDR-74/75/76、**DDR-81~85（2026-06-11 data_source 拍板）**、`spec/product/BSChat_M35_data_source.md`、M3/M1/M5 契約  
+> **架構模式**：Modular Monolith；**manual / from_search 於 request 內同步執行**，**url_auto 走背景 worker**（與 M6 純背景 enrich 不同）  
+> **版本**：v1.1（2026-06-11 對齊 data_source 6 類動態標籤；解除紅旗 1）
+
+> ⚠️ **v1.0 → v1.1 修正重點**：原 v1.0 §3/§6 寫死 `provenance_label: "LinkedIn 公開資料 · AI 整理 · n%"` 與 `source: "linkedin"`，**已作廢**。來源一律以 `data_source`（6 類）動態決定標籤，禁止把 mock / 推論結果標為「LinkedIn 公開資料」。
 
 ---
 
@@ -51,7 +54,7 @@ CREATE TABLE person_enrichments (
   user_id             UUID NOT NULL,
   enrich_version      INT NOT NULL DEFAULT 1,
   trigger_type        VARCHAR(20) NOT NULL,  -- url_auto | manual | from_search
-  source_type         VARCHAR(20) NOT NULL,  -- linkedin_url | people_api | web_search
+  source_type         VARCHAR(20) NOT NULL,  -- linkedin_url | people_api | web_search | card_inference | user_manual
   linkedin_url        TEXT,
   profile_headline    TEXT,
   profile_summary     TEXT,                  -- raw snippet / About 前 N 字
@@ -94,9 +97,11 @@ CREATE TABLE person_enrich_jobs (
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS person_scope TEXT;           -- M3.5 主显示（gate 通过后）
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS person_scope_confidence FLOAT;
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS person_enrich_status VARCHAR(20);  -- never | pending | completed | rejected
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS person_enrich_status VARCHAR(20);  -- never | pending | completed | insufficient | rejected
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS person_enriched_at TIMESTAMPTZ;
 ```
+
+> **`insufficient`（v1.1 新增）**：信心低於門檻 或 有 URL 讀不到。此狀態 `person_scope` 為空、**不扣額度**，UI 顯示原因 + 導向 M3 推估（禁止 `completed` 但 `person_scope` 為空，舊資料以 `insufficient` 呈現）。
 
 **与 M3 字段关系**：
 
@@ -136,6 +141,34 @@ ALTER TABLE user_entitlements ADD COLUMN IF NOT EXISTS person_linkedin_auto_on_u
 
 ---
 
+## 2.5 `data_source` 對外語意層（v1.1 · DDR-85）
+
+`source_type` 是 DB 技術欄；對外（API `data_source` + UI `provenance_label`）**一律經此映射**，禁止寫死字串。
+
+| `source_type`(DB) | 條件 | `data_source`(API) | `provenance_label`(UI) | 扣 LinkedIn 額度 |
+|---|---|---|---|:--:|
+| `linkedin_url` | 有 URL 且讀到真頁片段 | `linkedin_profile` | ✦ LinkedIn 個人頁 · AI 整理 · {n}% | 是 |
+| `people_api`（有 URL） | 搜尋命中且回傳 URL | `linkedin_search` | ✦ LinkedIn 搜尋 · AI 整理 · {n}% | 是 |
+| `people_api`（無 URL，legacy mock） | 舊 mock 資料 | `card_inference` | ○ 名片推估（未找到 LinkedIn）· AI 整理 · {n}% | 否 |
+| `web_search` | 有 URL 但僅抓到公開網路摘要 | `linkedin_url_public` | ○ 依連結公開摘要 · AI 整理 · {n}% | 是（手動） |
+| `card_inference` | 找不到，純名片推論 | `card_inference` | ○ 名片推估（未找到 LinkedIn）· AI 整理 · {n}% | 否 |
+| `user_manual` | 使用者自填 | `user_manual` | ✎ 使用者筆記 | 否 |
+| —（讀取失敗未 fallback） | 有 URL 讀不到 | `unavailable` | 空狀態 + 說明 | 否 |
+
+**mock 防冒充紅線（紅旗 2）**：`person_search_provider=mock` 或無真實 snippet 時，**禁止**輸出 `linkedin_profile` / `linkedin_search`；只能 `card_inference` 或 `unavailable`，UI 不得出現 ✦ LinkedIn。實作可在 `card_inference` 標籤追加「（開發環境未接 LinkedIn API）」提示。
+
+**confidence 門檻（依來源分級）**：
+
+| 路徑 | gate（config） | 未達門檻 |
+|---|---|---|
+| `linkedin_profile` / `linkedin_search` | `person_confidence_gate` = 0.75 | `insufficient`，不扣額度 |
+| `linkedin_url_public`（web_search on URL） | `person_confidence_gate_web` = 0.70 | 同上 |
+| `card_inference` | `person_confidence_gate_card` = 0.65 | 同上 |
+
+match 門檻：`person_match_gate` = 0.8（低於 → `needs_confirmation`，不寫入）。
+
+---
+
 ## 3. API 規格
 
 **Base**：`/api/v1` · Bearer JWT
@@ -160,13 +193,30 @@ ALTER TABLE user_entitlements ADD COLUMN IF NOT EXISTS person_linkedin_auto_on_u
 }
 ```
 
-**Response 202**（queued）：
+**執行模式（v1.1 修正）**：manual / confirm / from_search **於 request 內同步執行**整條 pipeline，直接回 `200` 帶終態（`completed` / `needs_confirmation` / `insufficient` / `rejected`）。只有 `url_auto`（收錄後自動）走背景 worker。
+
+**Response 200**（completed）：
 
 ```json
 {
-  "job_id": "uuid",
-  "status": "queued",
+  "status": "completed",
+  "person_scope": "可能負責工業級 SSD OEM 通路",
+  "confidence": 0.82,
+  "match_score": 0.91,
+  "data_source": "linkedin_profile",
+  "provenance_label": "✦ LinkedIn 個人頁 · AI 整理 · 82%",
   "quota_remaining": 19
+}
+```
+
+**Response 200**（insufficient — 信心不足 / URL 讀不到）：
+
+```json
+{
+  "status": "insufficient",
+  "data_source": "card_inference",
+  "message": "AI 整理信心 60% 低於門檻 65%，未寫入此區塊。",
+  "quota_remaining": 20
 }
 ```
 
@@ -203,10 +253,13 @@ ALTER TABLE user_entitlements ADD COLUMN IF NOT EXISTS person_linkedin_auto_on_u
   "confidence": 0.82,
   "match_score": 0.91,
   "source_type": "linkedin_url",
-  "updated_at": "2026-05-20T10:00:00Z",
-  "provenance_label": "LinkedIn 公開資料 · AI 整理 · 82%"
+  "data_source": "linkedin_profile",
+  "provenance_label": "✦ LinkedIn 個人頁 · AI 整理 · 82%",
+  "updated_at": "2026-05-20T10:00:00Z"
 }
 ```
+
+> `data_source` / `provenance_label` 一律由 §2.5 映射產生（`person_data_source()` / `person_provenance_label()`），**不得寫死**。
 
 ### POST `/contacts/{contact_id}/person-enrich/confirm`
 
@@ -228,42 +281,50 @@ async def run_person_enrich(payload: dict) -> None:
 
     contact = await load_contact(payload["contact_id"])
 
-    if payload["trigger"] == "url_auto":
+    if contact.linkedin_url:
         raw = await fetch_by_url(contact.linkedin_url)
-        match_score = 1.0
+        if raw is None:                       # DDR-83：有 URL 讀不到
+            await finish_insufficient(data_source="unavailable")  # 不 fallback，不扣額度
+            return
+        match_score = raw.match_score
     else:
         candidates = await search_people(contact)
-        if len(candidates) == 0:
-            await finish_failed("NO_CANDIDATES")
-            return
-        if len(candidates) > 1 and not payload.get("confirm_candidate_index"):
+        if len(candidates) == 0:              # DDR-82：無 URL 搜不到 → 自動 card_inference
+            raw = build_card_inference_candidate(contact)
+            match_score = 1.0                 # skip match gate
+        elif len(candidates) > 1 and not payload.get("confirm_candidate_index"):
             await save_needs_confirmation(candidates)
             return
-        raw = candidates[payload.get("confirm_candidate_index", 0)]
-        match_score = raw.match_score
+        else:
+            raw = candidates[payload.get("confirm_candidate_index", 0)]
+            match_score = raw.match_score
 
-    if match_score < 0.8:
-        await save_needs_confirmation([raw])  # unless user confirmed
+    if raw.source_type != "card_inference" and match_score < person_match_gate:  # 0.8
+        await save_needs_confirmation([raw])
         return
 
     result = await llm_summarize_person_scope(raw, contact)
-    if result.confidence < 0.75:
-        await finish_partial(result)
+    gate = confidence_gate_for(raw.source_type)  # 0.75 / 0.70 / 0.65（見 §2.5）
+    if result.confidence < gate:
+        await finish_insufficient(data_source=map(raw.source_type))  # 不扣額度
         return
 
-    await write_person_enrichment(contact, result, match_score)
+    await write_person_enrichment(contact, result, match_score)  # 扣額度規則見下
     enqueue_contact_index(contact.id)
 ```
 
-**Idempotency key**：`person:{contact_id}:{trigger}:{hour_bucket}`（manual 除外用 UUID）
+**Idempotency key**：`person:{contact_id}:{trigger}:{uuid}`；manual 15s 內重複點擊去抖、url_auto/from_search 24h 冪等略過。
 
-**Quota**：manual / from_search 在 job **成功 gate 后**扣减；failed 不扣（R-35.9 Pilot 可调）
+**Quota（DDR-84）**：只有「成功寫入**且為 LinkedIn 路徑**」才扣 `person_linkedin`：
+- `url_auto` → **永不扣**
+- `card_inference` / `user_manual` / `unavailable` → **不扣**
+- `linkedin_url` / `people_api`（有 URL）→ 扣；manual 且原本就有 URL 的 `web_search` → 扣
 
 ---
 
 ## 5. LLM Pipeline
 
-**文件**：`backend/app/ai/pipelines/person_scope.py`
+**文件**：`backend/app/ai/pipelines/person_enrich.py`（候選解析 + `summarize_person_scope`）；輸出 schema `backend/app/ai/schemas/person_scope_output.py`；LinkedIn 抓取 `person_linkedin_web.py`
 
 **Input**：
 
@@ -312,7 +373,8 @@ async def run_person_enrich(payload: dict) -> None:
     "person_scope": {
       "value": "可能負責 …",
       "confidence": 0.82,
-      "source": "linkedin",
+      "data_source": "linkedin_profile",
+      "provenance_label": "✦ LinkedIn 個人頁 · AI 整理 · 82%",
       "match_score": 0.91,
       "linkedin_url": "https://…",
       "updated_at": "…"
@@ -357,12 +419,14 @@ async def run_person_enrich(payload: dict) -> None:
 
 | 失败 | 处理 | UX |
 |------|------|-----|
-| Free 误触发 | API 403 / worker skip | 升級 CTA |
-| Quota 用尽 | 429 | 「本月 LinkedIn 補充已用完」 |
-| No candidates | job failed | 「找不到公開 LinkedIn 資料」 |
-| match 低 | needs_confirmation | 候选列表 |
-| LLM 失败 | retry 2x → 留空 | 仍显示 M3 推估 |
-| People API down | failed + alert | 稍后再试 |
+| Free 误触发 | API 403 `PERSON_ENRICH_NOT_ALLOWED` / worker skip | 升級 CTA |
+| Quota 用尽 | 429 `PERSON_LINKEDIN_QUOTA_EXCEEDED` | 「本月 LinkedIn 補充已用完」 |
+| **無 URL 且搜尋 0 筆**（DDR-82） | 自動 `card_inference`（達 0.65 門檻才寫入） | ○ 名片推估（未找到 LinkedIn） |
+| **有 URL 但讀不到**（DDR-83） | `insufficient` + `data_source=unavailable`，**不扣額度** | 「請確認連結是否正確，或改為自行輸入」 |
+| 信心低於門檻 | `insufficient`（`person_scope` 空），**不扣額度** | 說明原因 + 導向 M3 推估 |
+| match 低 | `needs_confirmation` | 候选列表 |
+| mock / 無真實 snippet（紅旗 2） | 禁止標 LinkedIn；降為 `card_inference` 或 `unavailable` | 不得出现 ✦ LinkedIn |
+| LLM 失败 | retry → `insufficient` | 仍显示 M3 推估 |
 
 ---
 
@@ -383,7 +447,28 @@ async def run_person_enrich(payload: dict) -> None:
 | DDR-74 | Free=M3 LLM only；Pro+=M3.5 |
 | DDR-75 | 不全库 silent 搜人；match<0.8 不写入 |
 | DDR-76 | 不覆写 OCR title；person 与 M3 字段并存 |
+| **DDR-81** | M3.5 与 M3 **分区呈现**；M3 推估降为「系统参考（名片推估）」（builder 回 `has_m3_fallback`） |
+| **DDR-82** | 失败混合 fallback：有 URL 读不到→停下问；无 URL 搜不到→自动 `card_inference` |
+| **DDR-83** | 有 URL 读不到 → `data_source=unavailable` + `insufficient`，不扣额度 |
+| **DDR-84** | `card_inference` 免费（不扣 LinkedIn / 不扣 M3） |
+| **DDR-85** | `data_source` 6 类；对外标签经 §2.5 映射，禁止写死 |
 
 ---
 
-*SA/SD M3.5 v1.0 — SDLC Phase 1*
+## 11. v1.1 變更摘要（紅旗 1 對齊）
+
+| 區段 | v1.0（作廢） | v1.1 |
+|------|------|------|
+| §3 / §6 標籤 | 寫死「LinkedIn 公開資料 · AI 整理 · n%」 | `data_source`(6 類) 動態映射（§2.5） |
+| §3 執行 | 202 queued（worker） | manual/from_search 同步 200；僅 url_auto 走 worker |
+| §4 無候選 | `NO_CANDIDATES` failed | 自動 `card_inference`（DDR-82） |
+| 有 URL 讀不到 | 未定義 | `unavailable` + `insufficient`（DDR-83） |
+| confidence gate | 單一 0.75 | 分級 0.75 / 0.70 / 0.65（§2.5） |
+| 額度 | 成功即扣 | 僅 LinkedIn 路徑扣；card_inference/url_auto 不扣（DDR-84） |
+| status enum | never/pending/completed/rejected | +`insufficient` |
+
+> R-35.7（原「引用 person 欄位須標 LinkedIn 公開資料」）**作廢**，改依 §2.5 `data_source`。
+
+---
+
+*SA/SD M3.5 v1.1 — 2026-06-11 對齊 data_source（DDR-81~85）；v1.0 為 SDLC Phase 1 初版*

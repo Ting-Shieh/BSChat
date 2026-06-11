@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.entitlements import is_person_enrich_allowed
 from app.models.contact import Contact, ContactFieldProvenance
 from app.models.contact_search_document import ContactSearchDocument
 from app.modules.m6_enrichment.service import dispatch_company_enrich, trigger_enrich_for_contact
@@ -93,6 +94,8 @@ async def upsert_from_payload(db: AsyncSession, payload: dict) -> Contact:
     contact.emails = emails
     contact.address = fields.address
     contact.website = fields.website
+    if fields.linkedin_url:
+        contact.linkedin_url = fields.linkedin_url.strip()
     contact.source_type = event.sourceType
     contact.source_label = event.sourceLabel
     contact.capture_method = event.captureMethod
@@ -118,6 +121,26 @@ async def upsert_from_payload(db: AsyncSession, payload: dict) -> Contact:
 
     if fields.title and fields.title.strip():
         enqueue_contact_inference(contact.id, pass_number=1)
+
+    if (
+        fields.linkedin_url
+        and contact.linkedin_url
+        and user_id
+    ):
+        from app.models.user import UserEntitlement
+
+        ent_result = await db.execute(
+            select(UserEntitlement).where(UserEntitlement.user_id == user_id)
+        )
+        ent = ent_result.scalar_one_or_none()
+        if (
+            ent
+            and ent.person_enrich_mode == "linkedin_llm"
+            and ent.person_linkedin_auto_on_url
+        ):
+            from app.workers.tasks.person_enrich import enqueue_person_enrich_url_auto
+
+            enqueue_person_enrich_url_auto(contact.id, user_id)
 
     return contact
 
@@ -210,6 +233,7 @@ async def update_contact_fields(
     *,
     fields: dict,
     expected_version: int,
+    entitlement=None,
 ) -> tuple[Contact, bool]:
     """Apply manual edits. Returns (contact, should_dispatch_enrich)."""
     if contact.version != expected_version:
@@ -217,6 +241,7 @@ async def update_contact_fields(
 
     old_company = (contact.company_name or "").strip()
     old_title = (contact.title or "").strip()
+    old_linkedin = (contact.linkedin_url or "").strip()
 
     if "display_name" in fields:
         name = _normalize_optional_str(fields["display_name"])
@@ -235,6 +260,22 @@ async def update_contact_fields(
     if "email" in fields:
         email = _normalize_optional_str(fields["email"])
         contact.emails = _emails_json([email]) if email else []
+    if "linkedin_url" in fields:
+        contact.linkedin_url = _normalize_optional_str(fields["linkedin_url"])
+    if "person_scope" in fields:
+        if entitlement is None or not is_person_enrich_allowed(entitlement):
+            raise HTTPException(status_code=403, detail="PERSON_ENRICH_NOT_ALLOWED")
+        from app.modules.m3_5_person.service import clear_person_scope, write_manual_person_scope
+
+        raw_scope = fields["person_scope"]
+        if raw_scope is None or not str(raw_scope).strip():
+            await clear_person_scope(db, contact)
+        else:
+            await write_manual_person_scope(db, contact, str(raw_scope).strip())
+
+    linkedin_changed = (
+        "linkedin_url" in fields and (contact.linkedin_url or "").strip() != old_linkedin
+    )
 
     company_changed = "company_name" in fields and (contact.company_name or "").strip() != old_company
     title_changed = "title" in fields and (contact.title or "").strip() != old_title
@@ -290,6 +331,18 @@ async def update_contact_fields(
 
     if title_changed and contact.title:
         enqueue_contact_inference(contact.id, pass_number=1)
+
+    # M3.5: Pro + auto_on_url → auto person enrich when a LinkedIn URL is added/changed.
+    if (
+        linkedin_changed
+        and contact.linkedin_url
+        and entitlement is not None
+        and entitlement.person_enrich_mode == "linkedin_llm"
+        and entitlement.person_linkedin_auto_on_url
+    ):
+        from app.workers.tasks.person_enrich import enqueue_person_enrich_url_auto
+
+        enqueue_person_enrich_url_auto(contact.id, contact.user_id)
 
     return contact, should_enqueue
 

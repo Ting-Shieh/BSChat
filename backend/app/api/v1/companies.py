@@ -10,9 +10,20 @@ from app.core.db import get_db
 from app.models.company import Company, CompanyEnrichment
 from app.modules.m6_enrichment.manual_refresh import request_manual_re_enrich
 from app.modules.m6_enrichment.section_builder import build_enrichment_section
+from app.modules.m6_enrichment.stale_refresh import auto_refresh_active, scan_user_stale_refresh
 from app.schemas.company import CompanyDetailResponse, ReEnrichResponse
 
 router = APIRouter()
+
+
+@router.post("/companies/stale-refresh/scan", summary="M6 Layer 2 trigger stale auto-refresh scan (Pro)")
+async def trigger_stale_scan(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    if not auto_refresh_active(user.entitlement):
+        raise HTTPException(status_code=403, detail="AUTO_REFRESH_NOT_ENABLED")
+    return await scan_user_stale_refresh(db, user)
 
 
 @router.get("/companies/{company_id}", response_model=CompanyDetailResponse)

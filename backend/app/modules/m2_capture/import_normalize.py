@@ -3,6 +3,8 @@
 import html
 import re
 
+from app.modules.m2_capture.structured_html import extract_link_hints, html_to_visible_text
+
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _NAME_LIKE_RE = re.compile(r"^[\u4e00-\u9fff]{2,4}$")
 _TITLE_LIKE_RE = re.compile(
@@ -112,9 +114,8 @@ def _pick_website(website: str | None, page_url: str) -> str | None:
 
 def normalize_import_fields(fields: dict, *, html_text: str = "", page_url: str = "") -> dict:
     """Clean LLM / fallback output before persisting."""
-    from app.modules.m2_capture.structured_html import html_to_visible_text
-
     visible = html_to_visible_text(html_text) if html_text else ""
+    link_hints = extract_link_hints(html_text) if html_text else {"addresses": [], "websites": []}
 
     name = _unescape(fields.get("name"))
     company = _unescape(fields.get("company"))
@@ -143,6 +144,11 @@ def normalize_import_fields(fields: dict, *, html_text: str = "", page_url: str 
         company = _pick_company({"company": company}, visible)
 
     website = _pick_website(website, page_url)
+
+    if not address and link_hints.get("addresses"):
+        address = link_hints["addresses"][0]
+    if not website and link_hints.get("websites"):
+        website = _pick_website(link_hints["websites"][0], page_url)
 
     phones = [_unescape(str(p)) or str(p) for p in (fields.get("phones") or [])]
     phones = [re.sub(r"\s+#", " ext ", p).strip() for p in phones if p]

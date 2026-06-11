@@ -122,9 +122,19 @@ async def run_company_enrich(
     job.latency_ms = int((job.completed_at - started).total_seconds() * 1000)
     await db.commit()
 
-    if contact_id:
-        from app.workers.tasks.contact_index import enqueue_contact_index
+    from app.workers.tasks.contact_index import enqueue_contact_index
 
+    if trigger_type == "stale_auto":
+        # Products changed for the whole company → re-index every linked contact.
+        rows = await db.execute(
+            select(Contact.id).where(
+                Contact.company_id == company.id,
+                Contact.deleted_at.is_(None),
+            )
+        )
+        for (cid,) in rows.all():
+            enqueue_contact_index(cid)
+    elif contact_id:
         enqueue_contact_index(contact_id)
 
     if enrich_status in ("completed", "partial") and conf >= 0.5 and output.main_products:

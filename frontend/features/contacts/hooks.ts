@@ -21,8 +21,10 @@ export function useContact(contactId: string) {
     queryFn: () => contactsApi.getContact(token!, contactId),
     enabled: !!token && !!contactId,
     refetchInterval: (query) => {
-      const status = query.state.data?.sections.company_enrichment.status;
-      return status === "pending" ? 3000 : false;
+      const data = query.state.data;
+      const companyPending = data?.sections.company_enrichment.status === "pending";
+      const personPending = data?.sections.ai_inferred.person_enrich?.status === "pending";
+      return companyPending || personPending ? 3000 : false;
     },
   });
 }

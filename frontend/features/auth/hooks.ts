@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { devLogin, fetchMe } from "./api";
+import { devLogin, fetchMe, switchPlan } from "./api";
+import type { PlanTier } from "@/shared/types/auth";
 import { useAuthStore } from "./store";
 
 export function useMe() {
@@ -22,6 +23,19 @@ export function useDevLogin() {
     onSuccess: (data) => {
       setToken(data.access_token);
       queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+export function useSwitchPlan() {
+  const token = useAuthStore((s) => s.token);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (tier: PlanTier) => switchPlan(token!, tier),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contact"] });
     },
   });
 }

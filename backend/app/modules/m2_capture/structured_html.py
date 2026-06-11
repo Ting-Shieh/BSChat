@@ -4,9 +4,13 @@ import html
 import json
 import re
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 _EMAIL_HREF_RE = re.compile(r'href=["\']mailto:([^"\']+)["\']', re.I)
 _TEL_HREF_RE = re.compile(r'href=["\']tel:([^"\']+)["\']', re.I)
+_HTTP_HREF_RE = re.compile(r'href=["\'](https?://[^"\']+)["\']', re.I)
+_MAPS_Q_RE = re.compile(r"google\.com/maps/\?[^\"']*q=([^\"']+)", re.I)
+_PLATFORM_HOSTS = ("mysc.cc", "spidercard.com", "camcard.com", "hihello.com", "google.com")
 _JSON_LD_RE = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.I | re.S,
@@ -122,6 +126,41 @@ def extract_href_contacts(html_text: str) -> tuple[list[str], list[str]]:
     emails = list(dict.fromkeys(emails))[:3]
     phones = list(dict.fromkeys(phones))[:3]
     return emails, phones
+
+
+def _clean_maps_address(raw: str) -> list[str]:
+    text = unquote(raw).replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return []
+    # SPIDERCARD / similar: "內湖總部 : 台北市… 中和總部 : 新北市…"
+    parts = re.split(r"(?:內湖總部|中和總部|總部)\s*:\s*", text)
+    addresses = [p.strip() for p in parts if p.strip() and len(p.strip()) > 6]
+    if addresses:
+        return addresses[:2]
+    return [text] if len(text) > 6 else []
+
+
+def extract_link_hints(html_text: str) -> dict[str, list[str]]:
+    """External website + address hints from href (e.g. SPIDERCARD Official Website, Google Maps)."""
+    addresses: list[str] = []
+    for raw in _MAPS_Q_RE.findall(html_text):
+        addresses.extend(_clean_maps_address(raw))
+    addresses = list(dict.fromkeys(addresses))[:2]
+
+    websites: list[str] = []
+    for href in _HTTP_HREF_RE.findall(html_text):
+        host = (urlparse(href).hostname or "").lower()
+        if not host:
+            continue
+        if any(p in host for p in _PLATFORM_HOSTS):
+            continue
+        if "linkedin.com" in host or "facebook.com" in host or "instagram.com" in host:
+            continue
+        websites.append(href.rstrip("/"))
+    websites = list(dict.fromkeys(websites))[:3]
+
+    return {"addresses": addresses, "websites": websites}
 
 
 def extract_profile_image_url(html_text: str) -> str | None:

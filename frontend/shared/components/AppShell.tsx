@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useLogout, useMe } from "@/features/auth/hooks";
+import { useLogout, useMe, useSwitchPlan } from "@/features/auth/hooks";
+import type { PlanTier } from "@/shared/types/auth";
 import { useAuthHydrated } from "@/features/auth/useAuthHydrated";
 import { usePendingCount } from "@/features/capture/hooks";
 import { useAuthStore } from "@/features/auth/store";
@@ -23,7 +24,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const logout = useLogout();
   const { data: me, isError: meError } = useMe();
+  const switchPlan = useSwitchPlan();
   const { data: pending } = usePendingCount();
+  const isPro = me?.plan_tier === "pro" || me?.plan_tier === "enterprise";
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
@@ -59,18 +62,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-sm font-medium text-[var(--color-text-primary)]">
             {me?.display_name ?? "BSChat"}
           </p>
-          <p className="text-xs text-[var(--color-text-tertiary)]">{me?.plan_tier ?? "free"} plan</p>
+          <p className="text-xs text-[var(--color-text-tertiary)]">
+            {me?.plan_tier ?? "free"} plan
+            {me?.quotas?.person_linkedin_remaining_month != null && isPro && (
+              <> · LinkedIn 剩 {me.quotas.person_linkedin_remaining_month}</>
+            )}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            router.push("/login");
-          }}
-          className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
-        >
-          登出
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={switchPlan.isPending}
+            onClick={() => switchPlan.mutate((isPro ? "free" : "pro") as PlanTier)}
+            className="rounded border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-primary)] disabled:opacity-50"
+          >
+            {isPro ? "改 Free" : "試用 Pro"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              router.push("/login");
+            }}
+            className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
+          >
+            登出
+          </button>
+        </div>
       </header>
 
       <div className="flex-1">{children}</div>

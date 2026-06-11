@@ -63,6 +63,14 @@ def _normalize_phone(raw: str) -> str:
     return re.sub(r"[^\d+]", "", raw)
 
 
+def _pick_linkedin_url(props: dict[str, list[str]]) -> str | None:
+    for raw in props.get("URL", []):
+        url = raw.strip()
+        if "linkedin.com/in/" in url.lower():
+            return url
+    return None
+
+
 def parse_vcard(text: str) -> dict:
     """Parse vCard text into BSChat extracted_fields + confidences."""
     if not _VCARD_BEGIN.search(text):
@@ -84,6 +92,7 @@ def parse_vcard(text: str) -> dict:
     if address:
         address = ";".join(p for p in address.split(";") if p.strip()).replace(";;", " ").strip() or address
     website = _first(props, "URL")
+    linkedin_url = _pick_linkedin_url(props)
 
     fields = {
         "name": name,
@@ -93,6 +102,7 @@ def parse_vcard(text: str) -> dict:
         "emails": emails[:3],
         "address": address,
         "website": website,
+        "linkedin_url": linkedin_url,
     }
     confidences: dict[str, float] = {}
     for key in ("name", "company", "title", "address", "website"):

@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contact import Contact
+from app.models.user import UserEntitlement
+from app.modules.m3_5_person.section_builder import build_person_enrich_section
 from app.modules.m6_enrichment.section_builder import build_enrichment_section
 from app.schemas.contact import (
     AiInferredSection,
@@ -40,7 +42,12 @@ def to_list_item(
     )
 
 
-async def to_detail(db: AsyncSession, contact: Contact) -> ContactDetailResponse:
+async def to_detail(
+    db: AsyncSession,
+    contact: Contact,
+    *,
+    entitlement: UserEntitlement | None = None,
+) -> ContactDetailResponse:
     prov_by_name = {p.field_name: p for p in contact.provenance}
     field_values = {
         "name": contact.display_name,
@@ -66,6 +73,9 @@ async def to_detail(db: AsyncSession, contact: Contact) -> ContactDetailResponse
             "confidence": contact.responsibility_confidence,
             "source": "ai_inferred",
         }
+    ai_section.person_enrich = await build_person_enrich_section(
+        db, contact=contact, entitlement=entitlement
+    )
 
     enrichment_section = await build_enrichment_section(
         db, user_id=contact.user_id, company_id=contact.company_id
@@ -81,6 +91,7 @@ async def to_detail(db: AsyncSession, contact: Contact) -> ContactDetailResponse
         emails=contact.emails or [],
         address=contact.address,
         website=contact.website,
+        linkedin_url=contact.linkedin_url,
         source_type=contact.source_type,
         source_label=contact.source_label,
         review_status=contact.review_status,

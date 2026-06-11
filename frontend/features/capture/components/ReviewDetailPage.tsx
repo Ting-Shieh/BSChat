@@ -152,11 +152,13 @@ export function ReviewDetailPage() {
           </div>
         ))}
 
-        {(phones || emails) && (
+        {(phones || emails || str(fields.address) || str(fields.website)) && (
           <div className="rounded-lg bg-[var(--color-primary-muted)] p-3 text-sm text-[var(--color-text-secondary)]">
             {phones && <p>電話：{phones}</p>}
             {emails && <p>Email：{emails}</p>}
-            <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">（唯讀，確認後由 M3 結構化）</p>
+            {str(fields.address) && <p>地址：{str(fields.address)}</p>}
+            {str(fields.website) && <p>網站：{str(fields.website)}</p>}
+            <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">（唯讀，確認後寫入聯絡人）</p>
           </div>
         )}
 

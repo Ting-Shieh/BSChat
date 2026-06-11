@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCopyContact, CopyToast } from "@/features/actions";
 import { useAuthStore } from "@/features/auth/store";
 import { CompanyEnrichmentBlock } from "@/features/enrichment";
+import { PersonEnrichBlock } from "@/features/person-enrich";
 import { useReEnrichCompany } from "@/features/enrichment/hooks";
 import { SearchContextBanner, useSearchResultContext } from "@/features/search";
 import { ConfidenceDot } from "@/shared/components/ConfidenceDot";
@@ -92,6 +93,7 @@ export function ContactDetailPage({
 
   const original = localContact.sections.card_original;
   const ai = localContact.sections.ai_inferred.responsibility_scope;
+  const personEnrich = localContact.sections.ai_inferred.person_enrich;
   const phone = localContact.phones?.[0]?.value;
   const email = localContact.emails?.[0]?.value;
 
@@ -188,11 +190,35 @@ export function ContactDetailPage({
         </section>
       )}
 
+      {personEnrich && (
+        <PersonEnrichBlock
+          contactId={localContact.id}
+          section={personEnrich}
+          version={localContact.version}
+          hasLinkedIn={Boolean(localContact.linkedin_url?.trim())}
+          onContactUpdated={(updated) => {
+            setLocalContact(updated);
+            queryClient.setQueryData(["contacts", contact.id, token], updated);
+          }}
+          onAddLinkedIn={() => {
+            setEditError(null);
+            setEditOpen(true);
+          }}
+        />
+      )}
+
       {ai && (
-        <section className="rounded-xl border border-[var(--color-ai-border)] bg-[var(--color-ai-bg)] p-4">
-          <h2 className="mb-2 text-sm font-medium text-[var(--color-ai-text)]">AI 推估職責</h2>
-          <p className="text-sm text-[var(--color-text-primary)]">{String(ai.value)}</p>
-        </section>
+        <details className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-[var(--color-text-secondary)]">
+            系統參考（名片推估）
+          </summary>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+            {String(ai.value)}
+          </p>
+          <p className="mt-2 text-[10px] text-[var(--color-text-tertiary)]">
+            僅供對照，與上方「職責理解」來源不同。
+          </p>
+        </details>
       )}
 
       <CompanyEnrichmentBlock

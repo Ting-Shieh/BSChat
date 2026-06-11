@@ -20,6 +20,7 @@ type Props = {
     email: string;
     address: string;
     website: string;
+    linkedin_url: string;
   }) => void;
 };
 
@@ -31,6 +32,7 @@ export function ContactEditSheet({ contact, open, saving, error, onClose, onSave
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [website, setWebsite] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +43,7 @@ export function ContactEditSheet({ contact, open, saving, error, onClose, onSave
     setEmail(contact.emails?.[0]?.value ?? "");
     setAddress(contact.address ?? "");
     setWebsite(contact.website ?? "");
+    setLinkedinUrl(contact.linkedin_url ?? "");
   }, [open, contact]);
 
   if (!open) return null;
@@ -55,6 +58,7 @@ export function ContactEditSheet({ contact, open, saving, error, onClose, onSave
       email: email.trim(),
       address: address.trim(),
       website: website.trim(),
+      linkedin_url: linkedinUrl.trim(),
     });
   };
 
@@ -83,6 +87,7 @@ export function ContactEditSheet({ contact, open, saving, error, onClose, onSave
           <Field label="Email" value={email} onChange={setEmail} type="email" />
           <Field label="地址" value={address} onChange={setAddress} />
           <Field label="網站" value={website} onChange={setWebsite} />
+          <Field label="LinkedIn" value={linkedinUrl} onChange={setLinkedinUrl} placeholder="https://linkedin.com/in/..." />
         </div>
 
         {error && (
@@ -119,12 +124,14 @@ function Field({
   onChange,
   required,
   type = "text",
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
   type?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -134,6 +141,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
+        placeholder={placeholder}
         className={inputClass}
       />
     </label>

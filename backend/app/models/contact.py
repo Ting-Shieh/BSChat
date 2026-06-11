@@ -33,6 +33,12 @@ class Contact(Base):
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True
     )
+    # M3.5 person enrichment (Pro)
+    linkedin_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    person_scope: Mapped[str | None] = mapped_column(Text, nullable=True)
+    person_scope_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    person_enrich_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    person_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
