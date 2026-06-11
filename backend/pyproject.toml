@@ -43,3 +43,7 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# app.core.db.engine 為 module 級單例，須讓所有 async test/fixture 共用同一個 event loop，
+# 否則 pytest-asyncio 1.x 預設 function-scoped loop 會導致 asyncpg "attached to a different loop"。
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"

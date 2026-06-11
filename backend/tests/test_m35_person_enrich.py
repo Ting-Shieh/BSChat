@@ -123,4 +123,5 @@ END:VCARD"""
         detail = await client.get(f"/api/v1/contacts/{contact_id}", headers=headers)
         pe = detail.json()["sections"]["ai_inferred"]["person_enrich"]
         assert pe["is_pro"] is True
-        assert pe["status"] in ("never", "pending", "completed")
+        # url_auto 在 mock 環境讀不到 LinkedIn URL → 依 DDR-83 落到 insufficient（合法狀態）
+        assert pe["status"] in ("never", "pending", "completed", "insufficient")
