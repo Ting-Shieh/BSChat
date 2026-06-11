@@ -18,7 +18,8 @@ class PersonEnrichment(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     enrich_version: Mapped[int] = mapped_column(Integer, default=1)
     trigger_type: Mapped[str] = mapped_column(String(20))  # url_auto | manual | from_search
-    source_type: Mapped[str] = mapped_column(String(20))  # linkedin_url | people_api | web_search
+    # linkedin_url | people_api | web_search | card_inference | user_manual
+    source_type: Mapped[str] = mapped_column(String(20))
     linkedin_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile_headline: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -28,7 +29,7 @@ class PersonEnrichment(Base):
     match_inputs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     model: Mapped[str | None] = mapped_column(String(50), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    status: Mapped[str] = mapped_column(String(20))  # active | superseded | rejected | pending_confirm
+    status: Mapped[str] = mapped_column(String(20))  # active | superseded | rejected
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     person_enrich_provider: str = "gemini"  # gemini | claude | mock (LLM summarize)
     person_search_provider: str = "mock"  # mock | linkedin (official API, not wired yet)
     person_linkedin_web_fallback: bool = True  # Gemini Google Search for user-provided LinkedIn URLs
+    person_web_lookup_timeout_s: float = 20.0  # 同步請求內的 web 查詢逾時（避免 HTTP 掛太久）
     gemini_person_model: str = "gemini-2.5-flash"
     person_enrich_model: str = "claude-sonnet-4-20250514"
     person_match_gate: float = 0.8

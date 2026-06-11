@@ -54,8 +54,8 @@ def apply_plan_preset(ent: UserEntitlement, plan_tier: str) -> None:
         setattr(ent, key, value)
 
 
-def is_person_enrich_allowed(ent: UserEntitlement) -> bool:
-    return ent.person_enrich_mode == "linkedin_llm"
+def is_person_enrich_allowed(ent: UserEntitlement | None) -> bool:
+    return bool(ent and ent.person_enrich_mode == "linkedin_llm")
 
 
 def _utc_today(d: datetime) -> datetime.date:

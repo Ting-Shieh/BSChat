@@ -426,7 +426,8 @@ async def start_person_enrich(
         if person_linkedin_remaining(user.entitlement) == 0:
             raise HTTPException(status_code=429, detail="PERSON_LINKEDIN_QUOTA_EXCEEDED")
 
-    # Confirm path: reuse prior candidates, no new quota charge.
+    # Confirm path: 沿用先前消歧候選。先前產生 needs_confirmation 時未扣額度，
+    # 額度在此次確認且成功寫入時（_write_result → _uses_linkedin_quota）才扣一次。
     if confirm_candidate_index is not None:
         prior = running
         if not prior or not prior.candidates:
@@ -517,9 +518,11 @@ async def start_person_enrich(
             company_name=contact.company_name,
         )
         if candidate is None:
-            return await _finish_linkedin_fetch_failed(
+            result = await _finish_linkedin_fetch_failed(
                 db, contact=contact, job=job, started=started
             )
+            result["quota_remaining"] = person_linkedin_remaining(user.entitlement)
+            return result
         result = await _process_candidate(
             db,
             contact=contact,

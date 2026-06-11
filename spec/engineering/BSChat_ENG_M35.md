@@ -206,6 +206,11 @@ features/person-enrich/
 | DDR-86 | M3.5 後端用 Python/FastAPI/SQLAlchemy/Celery（對齊 repo LOCKED stack；M6 ENG 文件的 TS/Prisma 描述視為過時，不適用本模組） |
 | DDR-87 | manual/from_search 同步執行（request 內）；僅 url_auto 走 Celery，降低狀態輪詢複雜度 |
 | DDR-88 | 對外標籤一律經 `person_data_source()` / `person_provenance_label()` 映射，禁止 endpoint/前端寫死 |
+| DDR-89 | 同步請求內 web 查詢逾時可設（`person_web_lookup_timeout_s`，預設 20s；自 45s 降低，避免 HTTP 長掛） |
+
+### Code Review 紀錄（2026-06-11）
+
+無安全/阻擋性 bug。修正項：F1 model 註解校正、F3 fetch-fail 回應補 `quota_remaining`、F4 confirm quota 註解、F5 `is_person_enrich_allowed` 容忍 None、F2 web 查詢 timeout 45s→20s 並可設。全套 backend 58 passed。
 
 ---
 

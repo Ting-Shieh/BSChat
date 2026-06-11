@@ -127,7 +127,7 @@ async def fetch_profile_via_web_search(
         text, grounding_urls = await gemini_generate_with_google_search(
             prompt,
             model=settings.gemini_person_model,
-            timeout=45.0,
+            timeout=settings.person_web_lookup_timeout_s,
         )
     except Exception:
         return None
