@@ -53,6 +53,7 @@ PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有
 
 ## 變更紀錄
 
+- 2026-06-16：Stage 1 E2E — `test_pro_stage1.py`（Pro 設定 PATCH/403、live-augment 扣額度 + query_augmentations + DDR-36 不寫 cache）61 passed
 - 2026-06-16：Stage 1 開工 — **Pro 設定 UI**（`/settings`：方案、用量、auto-refresh、LinkedIn 自動補充）+ **M5 Layer3 live 查**（`POST /search/queries/:id/live-augment`、`query_augmentations` 表、`suggest_live` 觸發、扣 `live_augment` 額度、match_reason「即時查詢」標注；DDR-36 不寫 M6 cache）
 - 2026-06-15：Pro 產品定位收斂 + 分階段（PRD §11.5 細化）。Free＝「讓交換名片變有價值」；Pro＝＋「推薦可合作的名片（平台公開商務身份）」。**Pro 靈魂「推薦合作」依賴 Pool B，而 Pool B 只能由企業 Admin 發布（DDR-76/77）→ 必須等企業帳號**。階段：Stage 0（已完成 Pro 自己庫價值）/ Stage 1（可獨立做：Layer3 live 查 + Pro 設定 UI + E2E）/ Stage 2（⏳ 等企業帳號：M11 Pool B → M5b 跨池推薦）。M11/M5b 於 register 標 blocked-by 企業帳號。
 - 2026-06-11：M35-009 決策 — 官方 LinkedIn API **待審核未過，擱置**。Pro 上線資料來源僅靠：①有 URL → Gemini 公開搜尋（`linkedin_url_public`「○ 依連結公開摘要」）②無 URL → `card_inference`「○ 名片推估」。**mock/無官方 API 時永不輸出 ✦ LinkedIn**（紅旗 2 收斂為硬化 + 測試，非接 provider）。
