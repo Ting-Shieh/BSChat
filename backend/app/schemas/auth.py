@@ -7,6 +7,7 @@ class DevLoginRequest(BaseModel):
     email: EmailStr = Field(examples=["dev@example.com"])
     display_name: str | None = Field(default="Dev User", examples=["Dev User"])
     plan_tier: str = Field(default="free", examples=["free"], description="free | pro | enterprise")
+    seed_org: str | None = Field(default=None, examples=["acme-demo"], description="Dev: attach org + demo stubs")
 
 
 class TokenResponse(BaseModel):
@@ -31,6 +32,12 @@ class AutoRefreshInfo(BaseModel):
     interval_days: int
 
 
+class OrgMembershipInfo(BaseModel):
+    org_id: UUID
+    org_name: str
+    role: str
+
+
 class MeResponse(BaseModel):
     id: UUID
     email: str
@@ -40,6 +47,7 @@ class MeResponse(BaseModel):
     quotas: QuotaInfo
     person_enrich: PersonEnrichInfo
     auto_refresh: AutoRefreshInfo
+    org_memberships: list[OrgMembershipInfo] = Field(default_factory=list)
 
 
 class PlanSwitchRequest(BaseModel):

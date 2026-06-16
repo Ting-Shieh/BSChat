@@ -7,6 +7,7 @@ from app.core.auth import create_access_token
 from app.core.entitlements import apply_plan_preset
 from app.core.db import get_db
 from app.models.user import User, UserEntitlement, Workspace
+from app.modules.m11_public_directory.service import ensure_org_membership, seed_demo_stubs
 from app.schemas.auth import DevLoginRequest, TokenResponse
 
 router = APIRouter()
@@ -43,6 +44,11 @@ async def dev_login(body: DevLoginRequest, db: AsyncSession = Depends(get_db)) -
             entitlement = UserEntitlement(user_id=user.id)
             db.add(entitlement)
         apply_plan_preset(entitlement, plan_tier)
+
+    if body.seed_org:
+        org = await ensure_org_membership(db, user, body.seed_org.strip().lower())
+        if body.seed_org.strip().lower() == "acme-demo":
+            await seed_demo_stubs(db, org, user.id)
 
     await db.commit()
     await db.refresh(user)

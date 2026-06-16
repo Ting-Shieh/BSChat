@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConfidenceDot } from "@/shared/components/ConfidenceDot";
 import { EmptyState } from "@/shared/components/EmptyState";
+import { resolveMediaUrl } from "@/shared/lib/media-url";
 import { useAuthStore } from "@/features/auth/store";
 import type { CardListItem } from "@/shared/types/capture";
 import * as captureApi from "../api";
@@ -71,12 +72,14 @@ function ReviewCardRow({ card, onSkip, onDelete, onReocr, reocrPending, skipPend
   const engine = card.ocr_summary?.engine;
   const isMock = engine === "mock-ocr" || !engine;
 
+  const imageSrc = resolveMediaUrl(card.image_url);
+
   return (
     <div className="flex gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <Link href={`/review/${card.id}`} className="flex min-w-0 flex-1 gap-3">
-        {card.image_url && (
+        {imageSrc && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={card.image_url} alt="" className="h-20 w-14 shrink-0 rounded object-cover" />
+          <img src={imageSrc} alt="" className="h-20 w-14 shrink-0 rounded object-cover" />
         )}
         <CardFields card={card} />
       </Link>

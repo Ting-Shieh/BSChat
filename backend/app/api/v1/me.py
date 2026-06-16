@@ -18,18 +18,20 @@ from app.models.user import UserEntitlement
 from app.schemas.auth import (
     AutoRefreshInfo,
     MeResponse,
+    OrgMembershipInfo,
     PersonEnrichInfo,
     PlanSwitchRequest,
     QuotaInfo,
     SettingsUpdateRequest,
 )
+from app.modules.m11_public_directory.service import list_user_org_memberships
 
 router = APIRouter()
 
 ALLOWED_REFRESH_INTERVALS = {30, 60, 90}
 
 
-def _build_me(user, entitlement: UserEntitlement) -> MeResponse:
+def _build_me(user, entitlement: UserEntitlement, org_memberships: list[OrgMembershipInfo]) -> MeResponse:
     manual_remaining = manual_refresh_remaining(entitlement)
     if manual_remaining < 0:
         manual_remaining = 999
@@ -61,6 +63,7 @@ def _build_me(user, entitlement: UserEntitlement) -> MeResponse:
             enabled=entitlement.auto_refresh_enabled,
             interval_days=entitlement.auto_refresh_interval_days,
         ),
+        org_memberships=org_memberships,
     )
 
 
@@ -75,7 +78,12 @@ async def get_me(
     await reset_person_linkedin_quota_if_needed(db, entitlement)
     await reset_live_augment_quota_if_needed(db, entitlement)
     await db.flush()
-    return _build_me(user, entitlement)
+    memberships = await list_user_org_memberships(db, user.id)
+    org_info = [
+        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
+        for org, role in memberships
+    ]
+    return _build_me(user, entitlement, org_info)
 
 
 @router.post("/plan", response_model=MeResponse, summary="Switch plan tier (dev/MVP, no billing)")
@@ -88,7 +96,12 @@ async def switch_plan(
     apply_plan_preset(user.entitlement, body.plan_tier)
     await db.commit()
     await db.refresh(user.entitlement)
-    return _build_me(user, user.entitlement)
+    memberships = await list_user_org_memberships(db, user.id)
+    org_info = [
+        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
+        for org, role in memberships
+    ]
+    return _build_me(user, user.entitlement, org_info)
 
 
 @router.patch("/settings", response_model=MeResponse, summary="Update Pro settings")
@@ -117,4 +130,9 @@ async def update_settings(
 
     await db.commit()
     await db.refresh(ent)
-    return _build_me(user, ent)
+    memberships = await list_user_org_memberships(db, user.id)
+    org_info = [
+        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
+        for org, role in memberships
+    ]
+    return _build_me(user, ent, org_info)

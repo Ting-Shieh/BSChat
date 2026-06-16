@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser
 from app.core.db import get_db
+from app.core.media_urls import public_media_url
 from app.core.storage import save_image, sha256_bytes
 from app.models.capture import OcrResult, RawCard
 from app.modules.m2_capture import service
@@ -53,7 +54,7 @@ def _card_detail(card: RawCard) -> CardDetailResponse:
         review_status=card.review_status,
         review_deferred_at=card.review_deferred_at,
         version=card.version,
-        image_url=card.image_url,
+        image_url=public_media_url(card.image_url),
         capture_method=card.capture_method,
         source_type=card.source_type,
         source_label=card.source_label,
@@ -71,7 +72,7 @@ def _card_list_item(card: RawCard) -> CardListItem:
         review_deferred_at=card.review_deferred_at,
         capture_method=card.capture_method,
         source_label=card.source_label,
-        image_url=card.image_url,
+        image_url=public_media_url(card.image_url),
         created_at=card.created_at,
         ocr_summary=_ocr_summary(card.ocr_result),
     )

@@ -1,15 +1,17 @@
 import Link from "next/link";
 import type { ContactListItem } from "@/shared/types/contact";
+import { resolveMediaUrl } from "@/shared/lib/media-url";
 
 export function ContactListCard({ contact }: { contact: ContactListItem }) {
+  const imageSrc = resolveMediaUrl(contact.image_url);
   return (
     <Link
       href={`/contacts/${contact.id}`}
       className="flex gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 hover:border-[var(--color-primary)]"
     >
-      {contact.image_url ? (
+      {imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={contact.image_url} alt="" className="h-20 w-14 shrink-0 rounded object-cover" />
+        <img src={imageSrc} alt="" className="h-20 w-14 shrink-0 rounded object-cover" />
       ) : (
         <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded bg-[var(--color-primary-muted)] text-lg font-medium text-[var(--color-primary)]">
           {(contact.display_name ?? "?")[0]}

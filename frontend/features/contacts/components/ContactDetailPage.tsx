@@ -12,6 +12,7 @@ import { useReEnrichCompany } from "@/features/enrichment/hooks";
 import { SearchContextBanner, useSearchResultContext } from "@/features/search";
 import { ConfidenceDot } from "@/shared/components/ConfidenceDot";
 import { PrivacyStrip } from "@/shared/components/PrivacyStrip";
+import { resolveMediaUrl } from "@/shared/lib/media-url";
 import type { ContactDetail } from "@/shared/types/contact";
 import { ContactEditSheet } from "./ContactEditSheet";
 import * as contactsApi from "../api";
@@ -92,6 +93,7 @@ export function ContactDetailPage({
   });
 
   const original = localContact.sections.card_original;
+  const cardImageSrc = resolveMediaUrl(original.image_url);
   const ai = localContact.sections.ai_inferred.responsibility_scope;
   const personEnrich = localContact.sections.ai_inferred.person_enrich;
   const phone = localContact.phones?.[0]?.value;
@@ -133,10 +135,10 @@ export function ContactDetailPage({
         />
       )}
 
-      {original.image_url && (
+      {cardImageSrc && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={original.image_url}
+          src={cardImageSrc}
           alt="名片"
           className="mx-auto max-h-48 rounded-lg border border-[var(--color-border)] object-contain"
         />

@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuthStore } from "@/features/auth/store";
 import { ConfidenceDot } from "@/shared/components/ConfidenceDot";
+import { resolveMediaUrl } from "@/shared/lib/media-url";
 import * as captureApi from "../api";
 import { useCard } from "../hooks";
 import { ActionToast } from "./ActionToast";
@@ -119,6 +120,7 @@ export function ReviewDetailPage() {
   const phones = Array.isArray(fields.phones) ? (fields.phones as string[]).join(" · ") : "";
   const emails = Array.isArray(fields.emails) ? (fields.emails as string[]).join(" · ") : "";
   const canSkip = card.review_status === "pending_review";
+  const cardImageSrc = resolveMediaUrl(card.image_url);
 
   return (
     <main className="flex flex-col gap-4 p-4">
@@ -126,10 +128,10 @@ export function ReviewDetailPage() {
         ← 返回列表
       </Link>
 
-      {card.image_url && (
+      {cardImageSrc && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={card.image_url}
+          src={cardImageSrc}
           alt="名片"
           className="mx-auto max-h-48 rounded-lg border border-[var(--color-border)] object-contain"
         />

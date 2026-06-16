@@ -463,10 +463,10 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 
 ---
 
-## 附录 — Phase 3：M5b Network Search（PRD §13 · 不阻塞 MVP）
+## 附录 — Phase 3：M5b 跨池搜尋（PRD §13 · 不阻塞 MVP）
 
 > **产品决策（v2.2）**：不搜别人的人脉；只搜**自愿公开**的商務身份。  
-> 企业合作：Enterprise 订阅 → M11 建立员工电子名片 → 进入 **Pool B**；Network Explorer 可搜。
+> 企业合作：Enterprise 订阅 → M11 建立员工公开商務身份 → 进入 **Pool B**；**Pro** 可搜。
 
 ### 两个搜索池
 
@@ -481,8 +481,8 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 |---|-------------|------|
 | F-5.17 | `search_scope`：private / network / all | P3 |
 | F-5.18 | 结果分来源标注（你的库 vs 公开池 · 公司名） | P3 |
-| F-5.19 | Network Explorer quota（M1） | P3 |
-| F-5.20 | 无 Network 时 teaser「公开池有 N 条匹配」 | P3 optional |
+| F-5.19 | Pro 跨池搜尋 quota（M1） | P3 |
+| F-5.20 | Free 时 teaser「公开池有 N 条匹配，升级 Pro」 | P3 optional |
 
 ### Phase 3 Rules
 
@@ -491,7 +491,7 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 | R-P3-1 | private contact **永不**写入 public index（DDR-62） |
 | R-P3-2 | Pool B 实体由 M11 创建，与 M3 private contact **分离** |
 | R-P3-3 | 员工下架 → 24h 内从 Pool B index 移除 |
-| R-P3-4 | Personal Free/Pro **仍只搜 Pool A**；不锁 Aha（DDR-61） |
+| R-P3-4 | Free **只搜 Pool A**；Pro / 企業版 可含 Pool B（DDR-61） |
 
 ### MVP 预留（SA/SD 低成本）
 
@@ -509,7 +509,7 @@ publisher_org_id?: string
 | 模块 | 关系 |
 |------|------|
 | **M11** | Pool B 数据 owner；企业电子名片 CRUD + 发布 |
-| **M1** | `plan_tier`: + `network_explorer` / `enterprise_publisher` |
+| **M1** | `plan_tier`: free / pro / enterprise |
 | **M5b** | 跨池检索 + rerank + explain（复用 Layer A/B pipeline） |
 | **M6** | 公开池公司资料 enrich（可共享 pipeline） |
 

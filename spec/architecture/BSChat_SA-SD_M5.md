@@ -643,7 +643,7 @@ M5 POST /search/queries/:id/adopt
 | `search_scope` | `private` only | `network` \| `all` |
 | Index 表 | `contact_search_documents` | + `public_directory_documents`（M11） |
 | `source_pool` | `private_rolodex` | + `public_directory` |
-| Auth | `user_id` filter | + Network Explorer entitlement |
+| Auth | `user_id` filter | + `plan_tier` pro/enterprise 可 `search_scope=network|all` |
 
 API 若收到 `search_scope=network` → **403 `SEARCH_SCOPE_NOT_ALLOWED`**（MVP）。
 

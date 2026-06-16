@@ -475,7 +475,7 @@ flowchart TD
 | **P0** | Search Tab、Input、ResultCard、Empty、Aha、Context Banner、M8 复制 |
 | **P1** | Live banner、adopt flow、refinement chips、多轮输入（session） |
 | **P2** | 搜尋历史列表、桌面 split 优化 |
-| **P3** | Pool B 来源标注、Network Explorer gate |
+| **P3** | Pool B 来源标注、Pro 跨池 scope gate |
 
 ---
 

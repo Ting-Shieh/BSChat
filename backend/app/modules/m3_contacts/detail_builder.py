@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.media_urls import public_media_url
 from app.models.contact import Contact
 from app.models.user import UserEntitlement
 from app.modules.m3_5_person.section_builder import build_person_enrich_section
@@ -34,7 +35,7 @@ def to_list_item(
         responsibility_confidence=contact.responsibility_confidence,
         source_label=contact.source_label,
         review_status=contact.review_status,
-        image_url=contact.image_url,
+        image_url=public_media_url(contact.image_url),
         phones_preview=_preview(contact.phones or []),
         emails_preview=_preview(contact.emails or []),
         company_products_preview=company_products_preview,
@@ -81,6 +82,8 @@ async def to_detail(
         db, user_id=contact.user_id, company_id=contact.company_id
     )
 
+    card_image = public_media_url(contact.image_url)
+
     return ContactDetailResponse(
         id=contact.id,
         company_id=contact.company_id,
@@ -95,12 +98,12 @@ async def to_detail(
         source_type=contact.source_type,
         source_label=contact.source_label,
         review_status=contact.review_status,
-        image_url=contact.image_url,
+        image_url=card_image,
         version=contact.version,
         created_at=contact.created_at,
         updated_at=contact.updated_at,
         sections=ContactSections(
-            card_original=CardOriginalSection(fields=original_fields, image_url=contact.image_url),
+            card_original=CardOriginalSection(fields=original_fields, image_url=card_image),
             ai_inferred=ai_section,
             company_enrichment=enrichment_section,
         ),

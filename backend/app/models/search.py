@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,13 +30,17 @@ class SearchQuery(Base):
 
 class SearchResult(Base):
     __tablename__ = "search_results"
-    __table_args__ = (UniqueConstraint("query_id", "contact_id", name="uq_search_result_contact"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     query_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("search_queries.id", ondelete="CASCADE"), index=True
     )
-    contact_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("contacts.id"))
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=True
+    )
+    stub_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("public_business_stubs.id"), nullable=True
+    )
     rank: Mapped[int] = mapped_column(Integer)
     match_score: Mapped[float] = mapped_column(Float)
     match_reason: Mapped[str] = mapped_column(Text)

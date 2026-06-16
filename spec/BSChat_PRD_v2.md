@@ -168,7 +168,7 @@ v2 訪談揭示的真實需求是：
 | DDR-38 | M1 管訂閱與開關；M6 管 enrich 執行 | 職責分離 | M1、M6 |
 | DDR-39 | MVP 可 hardcode plan=free | schema 預留 Pro entitlement 欄位 | M1 |
 | DDR-71 | MVP **不顯示**通用搜尋靈感 chips；**Pro** 才提供依已索引名片推導的個人化範例查詢 | 通用範例與使用者名片池無關、易誤觸消耗額度；個人化建議需有資料基礎才有價值；仍不固定儲存 profile（延續 DDR-5） | M5 搜尋、M1 訂閱 |
-| DDR-72 | **UI 只顯示 Pool A「可搜尋」人數**；`indexed_count` 限指**自己名片庫已建索引**且**刪除同步遞減**；Pool B / 非自己庫的 AI 推薦來源**不共用「已索引」文案**，Pro/Phase 3 另列「商務網絡」或結果 `source_pool` | 避免「已索引 vs 聯絡人總數」雙數字混淆；為 Network Explorer / 庫外推薦預留語意 | M5、M3、M11、M1 |
+| DDR-72 | **UI 只顯示 Pool A「可搜尋」人數**；`indexed_count` 限指**自己名片庫已建索引**且**刪除同步遞減**；Pool B / 非自己庫的 AI 推薦來源**不共用「已索引」文案**，Pro/Phase 3 另列「商務網絡」或結果 `source_pool` | 避免「已索引 vs 聯絡人總數」雙數字混淆；為 Pro 搜公開商務池 / 庫外推薦預留語意 | M5、M3、M11、M1 |
 | DDR-73 | 對話式搜尋解析**多維度查詢條件**（公司/產業/場合/職能/地區等），**不限於職稱字面**；使用者明確約束（如「架構師就好」）視為**硬條件**，跨欄位比對（`title`、`responsibility_scope`、`company_products`、`company_name`、`source_label` 等），**不符合則不返回**；禁止 `match_reason` 寫「不符合」卻仍出現在結果中 | 使用者用產業/公司/情境問法多樣；召回+rerank 易「部分相關就列出」；硬條件寧可 NO_MATCH（延續 DDR-5） | M5 搜尋、M3、M6 |
 | DDR-74 | **個人職責理解分層**：Free = M3 LLM 推估（title + company + M6 products）；Pro/Enterprise = 可加 **M3.5 LinkedIn + LLM** 個人公開資料補充；Free **永不**觸發外部 people search | 持續 API 成本與錯人風險應付費；Free 仍保留 Aha（公司 + 推估）；LinkedIn 資料經第三方/API，非 M6 公司 enrich | M3、M3.5、M1 |
 | DDR-75 | M3.5 **不自動對全庫 silent 搜人**；僅：① 名片/import 含 `linkedin_url` 且 Pro ② 使用者手動「LinkedIn 補充」③ Enterprise 可配置 batch（Phase 2）；`match_score < 0.8` 不寫入 Contact | 同名消歧與合規；寧可提示確認也不錯人寫庫 | M3.5、M1 |
@@ -343,8 +343,8 @@ Step 7: 隱私說明（簡短，非阻塞）
 
 ## 11. 商業模式與付費分層（v2.4 · 2026-06 鎖定）
 
-> **取代** v2.1–v2.3 的 §11.2.1–§11.2.3、§11.4–§11.5 及「Network Explorer / Enterprise Publisher」獨立方案敘事。  
-> **對外只談三方案**：**Free｜Pro｜企業版**。§13 保留背景，以本章為準。
+> **取代** v2.1–v2.3 的 §11.2.1–§11.2.3、§11.4–§11.5 及舊版獨立加購方案敘事。  
+> **對外只談三方案**：**Free｜Pro｜企業版**。§13 為 Phase 3 技術背景，方案分層以本章為準。
 
 ### 11.1 定價原則
 
@@ -505,7 +505,7 @@ M7  預設私密；私人庫永不進公開索引
 
 | ID | 決策 |
 |----|------|
-| DDR-74 | 對外只談 **Free｜Pro｜企業版**；取消 Network Explorer 等加購敘事 |
+| DDR-74 | 對外只談 **Free｜Pro｜企業版**；不另售第四檔加購方案 |
 | DDR-75 | **薄 stub + 外部名片 URL**；不做完整 e-card 宿主 |
 | DDR-76 | **Pro = 搜公開目錄（讀）**；**企業版 = 發布 + Admin 管理（寫）** |
 | DDR-77 | 企業 **seat 預設全部公開** |
@@ -589,13 +589,13 @@ M7  預設私密；私人庫永不進公開索引
 
 ---
 
-## 13. Phase 3 — 授權公開商務池 + 企業電子名片（v2.2 新增）
+## 13. Phase 3 — 授權公開商務池 + 企業公開目錄（v2.2 新增）
 
-> **⚠️ 方案分層以 §11 v2.4 為準**（Free｜Pro｜企業版三方案；無 Network Explorer 加購）。本章保留 **M11 願景與資料模型背景**。
+> **方案分層以 §11 v2.4 為準**（Free｜Pro｜企業版）。本章說明 Phase 3 的**資料池與模組分工**；收費與賣點見 §11。
 
 > **決策摘要（2026-05 產品討論）**：  
 > 不搜別人的人脈；只搜**自願公開**的商務身份。  
-> 與企業合作：企業付訂閱、在平台建立員工電子名片，員工名片進入**公開可搜池**；一般使用者 AI 搜尋預設仍限**自己的名片池**。
+> 與企業合作：企業付訂閱、Admin 發布員工公開商務身份，進入**公開可搜池**；**Pro** 使用者 AI 搜尋可含此池；**Free** 仍限**自己的名片池**。
 
 ### 13.1 兩個搜尋池（Search Pools）
 
@@ -609,69 +609,71 @@ M7  預設私密；私人庫永不進公開索引
 
 ┌─────────────────────────────────────────────────────────┐
 │  Pool B — 授權公開商務池（Public Business Directory）    │
-│  · 企業在 BSChat 建立的員工電子名片（主路徑）            │
+│  · 企業 Admin 發布的員工公開商務身份（主路徑）           │
 │  · 未來：個人自願發布自己的商務身份（次路徑）            │
 │  · 明確 opt-in；可隨時撤回                               │
-│  · Phase 3 M5b：Network 訂閱者可搜                       │
+│  · Phase 3：**Pro / 企業版** 可搜                        │
 └─────────────────────────────────────────────────────────┘
 ```
 
 **同一個對話式搜尋 UI**，但 scope 不同：
 
-| 使用者方案 | 可搜 Pool A | 可搜 Pool B |
-|------------|:-----------:|:-----------:|
-| Free / Personal Pro | ✅ | ❌ |
-| Network Explorer | ✅ | ✅ |
-| Enterprise Publisher 員工 | ✅ | ✅（自家目錄管理） |
+| 使用者方案 | 可搜 Pool A（自己庫） | 可搜 Pool B（公開目錄） |
+|------------|:---------------------:|:-----------------------:|
+| Free | ✅ | ❌ |
+| Pro | ✅ | ✅ |
+| 企業版 | ✅ | ✅（另可 **發布/管理** 自家目錄） |
 
-結果卡必須標示來源：**「你的名片庫」** vs **「BSChat 公開商務池 · {公司名}」**。
+結果卡必須標示來源：**「你的名片庫」** vs **「公開商務 · {公司名}」**（見 DDR-80）。
 
 ### 13.2 企業合作模式（Supply Side）
 
 **價值主張（對企業）**：
-- 統一員工電子名片、品牌一致
-- 員工名片可被 BSChat 用戶以自然語言找到（精準曝光）
+- 統一對外商務窗口、品牌一致
+- 員工公開身份可被 BSChat **Pro 用戶**以自然語言找到（精準曝光）
 - 不需自建 SEO / 黃頁；AI 匹配「誰做工業電腦 OEM」時出現你們的人
 
 **流程（概念）**：
 
 ```
-企業簽 Enterprise 訂閱
-    → 建立 Organization + 品牌模板
-    → 批量/邀請建立員工電子名片
-    → 員工確認「同意公開至 BSChat 商務池」
+企業簽 企業版 訂閱
+    → 建立 Organization + Admin
+    → 批量/CSV 建立員工公開商務身份（薄 stub + 外部名片 URL）
+    → Admin 發布至公開池
     → 名片進入 public_directory index
-    → Network Explorer 用戶可搜尋到
+    → Pro / 企業版 用戶可搜尋到
 ```
 
 **企業控管**：
-- Admin 可停用離職員工名片（即時下架）
-- 可設定哪些字段公開（電話/Email 可選隱藏或「請求聯絡」）
+- Admin 可停用離職員工身份（即時下架）
+- MVP：**不在 BSChat 展示**公開身份的電話/Email；Pro 只見摘要 + 前往外部名片（DDR-80）
 - 用量報表：被搜尋次數、被查看次數（Phase 3 後期）
 
 **模組歸屬（規劃）**：
-- **M11 企業電子名片**：建立、模板、Org 管理、發布至公開池
-- **M5b Network Search**：跨池检索、结果来源标注
-- **M1**：Enterprise / Network 方案与 quota
+- **M11 企業公開商務目錄**：Org、Admin、stub CRUD、發布至公開池
+- **M5b 跨池搜尋**：私人池 + 公開池检索、结果来源标注
+- **M1**：Free / Pro / 企業版 方案与 quota
 
-### 13.3 個人使用者（Demand Side）
+### 13.3 個人使用者（Demand Side · Pro）
 
-MVP 不變：Free/Pro 只搜 Pool A，確保 Aha Moment。
+MVP / Free：只搜 Pool A，確保 Aha Moment。
 
-Phase 3 加購 **Network Explorer**：
+**Pro（Stage 2）**：
 - 同一對話：「我手上有誰 / **平台上有誰** 做工業電腦的？」
 - 或 UI 切換：「含公開商務池」
 - 匹配理由同上（公司產品 + 職責），但标注 **公開池來源**
+
+Free 用戶若嘗試含公開池 → 升級 Pro CTA（可選 teaser：「公開池有 N 条匹配」）。
 
 ### 13.4 與 MVP 的邊界（不阻塞 Phase 1）
 
 | 項目 | MVP（Phase 1） | Phase 3 |
 |------|----------------|---------|
-| M5 搜尋範圍 | 仅 Pool A | + Pool B |
-| 電子名片 | M2 匯入**他人**連結/QR | M11 **建立自己**的電子名片 |
+| M5 搜尋範圍 | 仅 Pool A | + Pool B（Pro+） |
+| 公開商務身份 | 無 | M11 Admin 發布 stub |
 | Index | `contact_search_documents` | + `public_directory_documents` |
 | 隐私 | 全部 private | 公开池独立实体，不泄露 private |
-| 收費 | Personal Pro = 資料新鮮度 | + Enterprise + Network Explorer |
+| 收費 | Free + Pro（自己庫 + 資料新鮮度） | + **企業版**（發布目錄） |
 
 **MVP 架构预留（低成本）**：
 - M5 API 预留 `search_scope: private | network | all`（默认 private）
@@ -682,26 +684,26 @@ Phase 3 加購 **Network Explorer**：
 | 原则 | 说明 |
 |------|------|
 | 默认私密 | 扫进来的第三方名片**永远**在 Pool A，不可被他人搜 |
-| 自愿公开 | 进 Pool B 必须本人 +（企业场景）Admin 双重确认 |
+| 自愿公开 | 进 Pool B 须企业 Admin 主动发布（MVP）；完整版可加員工二次確認 |
 | 可撤回 | 下架后 24h 内从 index 移除 |
-| 透明 | 公开池结果卡显示「公开商務身份 · 非来自他人私人库」 |
+| 透明 | 公开池结果卡显示「公開商務 · 非来自他人私人库」 |
 | 不转售人脉 | 禁止「上传通讯录换曝光」类模式 |
 
 ### 13.6 Phase 3 User Stories（摘要）
 
-**US-11.1 企業建立員工電子名片**
-> As a 企業 Admin, I want to 在 BSChat 批量建立品牌一致的員工電子名片, so that 我們的窗口能被 AI 搜尋找到。
+**US-11.1 企業 Admin 發布公開商務身份**
+> As a 企業 Admin, I want to 在 BSChat 建立並發布員工公開商務身份, so that 我們的窗口能被 Pro 用戶 AI 搜尋找到。
 
-**US-5.7 搜尋公開商務池（Network Explorer）**
-> As a B2B 業務代表, I want to 在對話搜尋中包含 BSChat 公開商務池, so that 我不只找自己收過的名片，還能找到新的潛在窗口。
+**US-5.7 搜尋公開商務池（Pro）**
+> As a B2B 業務代表（Pro）, I want to 在對話搜尋中包含 BSChat 公開商務池, so that 我不只找自己收過的名片，還能找到新的潛在窗口。
 
 Acceptance Criteria:
-- Given Personal Pro 无 Network, When 搜尋, Then 仅 Pool A
-- Given Network Explorer, When 搜尋, Then Pool A + B，结果分組或标注来源
-- Given 企业下架员工, When 再搜尋, Then 该员工不出现在 Pool B
+- Given Free, When 搜尋含公開池, Then 403 或僅 Pool A + 升級 CTA
+- Given Pro, When 搜尋含公開池, Then Pool A + B，结果分組或标注来源
+- Given 企业 Admin 下架员工, When 再搜尋, Then 该员工不出现在 Pool B
 
 **US-11.2 員工同意公開**
-> As a 企業員工, I want to 確認是否同意我的電子名片被平台用戶搜尋, so that 我掌握曝光範圍。
+> As a 企業員工, I want to 確認是否同意我的公開身份被平台用戶搜尋, so that 我掌握曝光範圍。（MVP 簡化：Admin 發布即 org 授權）
 
 ### 13.7 新增 DDR
 
@@ -709,15 +711,15 @@ Acceptance Criteria:
 |----|------|
 | DDR-58 | AI 搜尋分 **Pool A（私人）** 与 **Pool B（授权公开）**；MVP 仅 A |
 | DDR-59 | **禁止**搜尋他人私人收錄的聯絡人；Pool B 仅自愿公开的商務身份 |
-| DDR-60 | 企業電子名片（M11）为 Pool B **主路径**；企业订阅换可搜曝光 |
-| DDR-61 | Personal Free/Pro 不锁 Pool A；Network Explorer 才开放 Pool B |
+| DDR-60 | 企業公開目錄（M11）为 Pool B **主路径**；企业订阅换可搜曝光 |
+| DDR-61 | Free 不開 Pool B；**Pro / 企業版** 可搜 Pool B |
 | DDR-62 | 公开池与私人库 **索引隔离**；private contact 永不进入 public index |
 
 ### 13.8 冷啟動与 GTM 建议
 
-1. **MVP 先验证 Pool A** — 个人 Aha 成立后再推 Network
+1. **MVP 先验证 Pool A** — 个人 Aha 成立后再推 Pro 跨池
 2. **Enterprise 锚定客户** — 先签 2–3 家愿意公开目录的 B2B 厂商（工业电脑、自动化等垂直）
-3. **Network Explorer 定价** — 按查询次数或月费；免费用户可见「公开池有 N 条匹配，升级查看」teaser（可选，Pilot 定）
+3. **Pro 升級敘事** — 強調「推薦可合作的名片」；Free 可選 teaser「公开池有 N 条匹配，升级 Pro 查看」（Pilot 定）
 
 ---
 

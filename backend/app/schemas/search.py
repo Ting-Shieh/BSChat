@@ -26,14 +26,26 @@ class ContactPreviewDTO(BaseModel):
     image_url: str | None = None
 
 
+class StubPreviewDTO(BaseModel):
+    display_name: str
+    company_name: str
+    title: str | None = None
+    product_keywords: list[str] = Field(default_factory=list)
+
+
 class SearchResultItemDTO(BaseModel):
-    contact_id: UUID
     rank: int
     match_score: float
     match_reason: str
     match_sources: list[MatchSourceDTO]
     source_pool: str = "private_rolodex"
-    contact_preview: ContactPreviewDTO
+    contact_id: UUID | None = None
+    contact_preview: ContactPreviewDTO | None = None
+    stub_id: UUID | None = None
+    stub_preview: StubPreviewDTO | None = None
+    publisher_org_id: UUID | None = None
+    publisher_org_name: str | None = None
+    external_card_url: str | None = None
     live_products: list[str] | None = None
 
 
@@ -59,6 +71,7 @@ class SearchStatusResponse(BaseModel):
     min_recommended: int = 3
     sample_queries: list[str]
     quotas: SearchQuotasDTO
+    public_pool_count: int = 0
 
 
 class SearchQueryResponse(BaseModel):

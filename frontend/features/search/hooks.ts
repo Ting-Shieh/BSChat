@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/features/auth/store";
+import type { SearchScope } from "@/shared/types/search";
 import * as searchApi from "./api";
 
 export function useSearchStatus() {
@@ -13,11 +14,11 @@ export function useSearchStatus() {
   });
 }
 
-export function useSearch() {
+export function useSearch(scope: SearchScope = "private") {
   const token = useAuthStore((s) => s.token);
   return useMutation({
     mutationFn: (query_text: string) =>
-      searchApi.createSearchQuery(token!, { query_text, search_scope: "private" }),
+      searchApi.createSearchQuery(token!, { query_text, search_scope: scope }),
   });
 }
 

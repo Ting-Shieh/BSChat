@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.entitlements import is_person_enrich_allowed
+from app.core.media_urls import canonical_media_ref
 from app.models.contact import Contact, ContactFieldProvenance
 from app.models.contact_search_document import ContactSearchDocument
 from app.modules.m6_enrichment.service import dispatch_company_enrich, trigger_enrich_for_contact
@@ -99,7 +100,7 @@ async def upsert_from_payload(db: AsyncSession, payload: dict) -> Contact:
     contact.source_type = event.sourceType
     contact.source_label = event.sourceLabel
     contact.capture_method = event.captureMethod
-    contact.image_url = event.imageUrl
+    contact.image_url = canonical_media_ref(event.imageUrl)
     contact.review_status = review_status
     contact.search_text = search_text
     contact.search_status = "pending_index"

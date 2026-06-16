@@ -378,7 +378,19 @@ CORS_ORIGINS=http://localhost:3000
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8001
+# NEXT_PUBLIC_MEDIA_BASE_URL=   # 可選；後端 API 已回完整 image_url 時可不設
 ```
+
+### 7.3 Media URL Policy（2026-06-16）
+
+| 層 | 規則 |
+|----|------|
+| **DB** | 自有上傳存 `/uploads/{user}/{id}.ext`；外部匯入存 `https://...` |
+| **後端 env** | `STORAGE_PUBLIC_BASE_URL`（優先）→ `R2_PUBLIC_URL` → `API_BASE_URL` |
+| **API 回應** | `public_media_url()` 回可載入的完整 URL |
+| **前端** | 直接用 `image_url`；`resolveMediaUrl()` 僅 fallback 相對路徑 |
+
+上線換 CDN：**只改後端 `STORAGE_PUBLIC_BASE_URL` / `R2_PUBLIC_URL`，重 deploy**。
 
 ---
 

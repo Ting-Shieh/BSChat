@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useMe } from "@/features/auth/hooks";
 import { PrivacyStrip } from "@/shared/components/PrivacyStrip";
-import type { SearchQueryResponse } from "@/shared/types/search";
+import type { SearchQueryResponse, SearchResultItem } from "@/shared/types/search";
+import { cn } from "@/shared/lib/cn";
 import { useLiveAugment, useSearch, useSearchStatus } from "../hooks";
 import { AhaMomentModal } from "./AhaMomentModal";
 import { SearchEmptyState } from "./SearchEmptyState";
@@ -12,16 +14,42 @@ import { SearchResultCard } from "./SearchResultCard";
 
 const AHA_KEY = "bschat-aha-shown";
 
+type ResultFilter = "all" | "private" | "network";
+
+const RESULT_FILTERS: { id: ResultFilter; label: string }[] = [
+  { id: "all", label: "全部" },
+  { id: "private", label: "僅我的" },
+  { id: "network", label: "僅公開" },
+];
+
+function isPublicResult(item: SearchResultItem) {
+  return item.source_pool === "public_directory";
+}
+
+function filterResults(items: SearchResultItem[], filter: ResultFilter) {
+  if (filter === "all") return items;
+  if (filter === "network") return items.filter(isPublicResult);
+  return items.filter((item) => !isPublicResult(item));
+}
+
 export function SearchPage() {
+  const { data: me } = useMe();
+  const isPro = me?.plan_tier === "pro" || me?.plan_tier === "enterprise";
+  const apiScope = isPro ? "all" : "private";
+
   const { data: status, isLoading: statusLoading, isError: statusError } = useSearchStatus();
-  const search = useSearch();
+  const search = useSearch(apiScope);
   const [searchResult, setSearchResult] = useState<SearchQueryResponse | null>(null);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
   const liveAugment = useLiveAugment(searchResult?.query_id);
   const [showAha, setShowAha] = useState(false);
   const [draftQuery, setDraftQuery] = useState("");
 
   useEffect(() => {
-    if (search.data) setSearchResult(search.data);
+    if (search.data) {
+      setSearchResult(search.data);
+      setResultFilter("all");
+    }
   }, [search.data]);
 
   useEffect(() => {
@@ -36,19 +64,40 @@ export function SearchPage() {
   const inputDisabled = search.isPending || (status != null && (quotaZero || !status.can_search));
   const liveBusy = liveAugment.isPending;
 
+  const allResults = searchResult?.results ?? [];
+  const visibleResults = useMemo(
+    () => filterResults(allResults, resultFilter),
+    [allResults, resultFilter],
+  );
+
+  const hasMixedResults = useMemo(() => {
+    if (allResults.length === 0) return false;
+    const hasPrivate = allResults.some((item) => !isPublicResult(item));
+    const hasPublic = allResults.some(isPublicResult);
+    return hasPrivate && hasPublic;
+  }, [allResults]);
+
+  const statusLine = () => {
+    if (statusLoading) return "載入中…";
+    if (!status) return "用對話從名片庫找商機";
+    const parts = [`${status.indexed_count} 位可搜尋（你的名片庫）`];
+    if (isPro && (status.public_pool_count ?? 0) > 0) {
+      parts.push(`公開商務 ${status.public_pool_count} 位`);
+    }
+    parts.push(`今日剩餘 ${status.quotas.search_cache_remaining_today} 次`);
+    return parts.join(" · ");
+  };
+
+  const handleSearch = (q: string) => {
+    setResultFilter("all");
+    search.mutate(q);
+  };
+
   return (
     <main className="flex flex-col gap-4 p-4">
       <div>
         <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">AI 搜尋</h1>
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          {statusLoading
-            ? "載入中…"
-            : status
-              ? status.can_search && status.indexed_count < status.min_recommended
-                ? `已收錄 ${status.indexed_count} 位 · 再多收幾張，搜尋會更準 · 今日剩餘 ${status.quotas.search_cache_remaining_today} 次`
-                : `${status.indexed_count} 位可搜尋 · 今日剩餘 ${status.quotas.search_cache_remaining_today} 次`
-              : "用對話從名片庫找商機"}
-        </p>
+        <p className="text-sm text-[var(--color-text-secondary)]">{statusLine()}</p>
       </div>
 
       <SearchInput
@@ -56,7 +105,7 @@ export function SearchPage() {
         suggestions={status?.sample_queries ?? []}
         value={draftQuery}
         onValueChange={setDraftQuery}
-        onSubmit={(q) => search.mutate(q)}
+        onSubmit={handleSearch}
       />
 
       {statusError && (
@@ -77,7 +126,9 @@ export function SearchPage() {
       )}
 
       {search.isPending && (
-        <p className="animate-pulse text-sm text-[var(--color-text-secondary)]">正在比對你的名片庫…</p>
+        <p className="animate-pulse text-sm text-[var(--color-text-secondary)]">
+          {isPro ? "正在比對你的名片庫與公開商務…" : "正在比對…"}
+        </p>
       )}
 
       {liveBusy && (
@@ -115,16 +166,53 @@ export function SearchPage() {
         <p className="text-xs text-[var(--color-accent-hover)]">即時查詢失敗，請稍後再試。</p>
       )}
 
-      {searchResult?.status === "COMPLETED" && searchResult.results && (
+      {searchResult?.status === "COMPLETED" && allResults.length > 0 && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-[var(--color-text-tertiary)]">
-            找到 {searchResult.result_count} 位
-            {searchResult.degraded ? "（簡化排序）" : ""}
-            {searchResult.latency_ms ? ` · ${searchResult.latency_ms}ms` : ""}
-          </p>
-          {searchResult.results.map((item) => (
-            <SearchResultCard key={item.contact_id} item={item} queryId={searchResult.query_id} />
-          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-[var(--color-text-tertiary)]">
+              找到 {visibleResults.length} 位
+              {resultFilter !== "all" ? `（共 ${allResults.length} 位）` : ""}
+              {searchResult.degraded ? " · 簡化排序" : ""}
+              {searchResult.latency_ms ? ` · ${searchResult.latency_ms}ms` : ""}
+            </p>
+            {isPro && (
+              <div className="flex flex-wrap gap-1.5">
+                {RESULT_FILTERS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setResultFilter(opt.id)}
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors",
+                      resultFilter === opt.id
+                        ? "bg-[var(--color-primary)] text-white"
+                        : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {hasMixedResults && resultFilter === "all" && (
+            <p className="text-[10px] text-[var(--color-text-tertiary)]">
+              藍標為你的名片庫 · 綠標為公開商務身份
+            </p>
+          )}
+
+          {visibleResults.length === 0 ? (
+            <p className="text-xs text-[var(--color-text-secondary)]">此篩選沒有符合的結果，試試其他篩選。</p>
+          ) : (
+            visibleResults.map((item) => (
+              <SearchResultCard
+                key={item.stub_id ?? item.contact_id ?? String(item.rank)}
+                item={item}
+                queryId={searchResult.query_id}
+              />
+            ))
+          )}
         </div>
       )}
 

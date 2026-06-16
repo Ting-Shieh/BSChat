@@ -32,7 +32,7 @@ def _save_local(user_id: uuid.UUID, card_id: uuid.UUID, data: bytes, ext: str) -
     user_dir.mkdir(parents=True, exist_ok=True)
     path = user_dir / f"{card_id}.{ext}"
     path.write_bytes(data)
-    return f"{settings.api_base_url.rstrip('/')}/uploads/{user_id}/{card_id}.{ext}"
+    return f"/uploads/{user_id}/{card_id}.{ext}"
 
 
 def _save_r2(user_id: uuid.UUID, card_id: uuid.UUID, data: bytes, ext: str) -> str:
@@ -50,5 +50,4 @@ def _save_r2(user_id: uuid.UUID, card_id: uuid.UUID, data: bytes, ext: str) -> s
         Body=data,
         ContentType=f"image/{ext}",
     )
-    base = settings.r2_public_url or settings.api_base_url
-    return f"{base.rstrip('/')}/{key}"
+    return f"/uploads/{user_id}/{card_id}.{ext}"

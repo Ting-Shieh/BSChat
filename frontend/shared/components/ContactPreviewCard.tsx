@@ -1,4 +1,5 @@
 import type { ContactPreview } from "@/shared/types/search";
+import { resolveMediaUrl } from "@/shared/lib/media-url";
 
 export function ContactPreviewCard({
   preview,
@@ -7,11 +8,12 @@ export function ContactPreviewCard({
   preview: ContactPreview;
   footer?: React.ReactNode;
 }) {
+  const imageSrc = resolveMediaUrl(preview.image_url);
   return (
     <div className="flex gap-3">
-      {preview.image_url ? (
+      {imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview.image_url} alt="" className="h-16 w-12 shrink-0 rounded object-cover" />
+        <img src={imageSrc} alt="" className="h-16 w-12 shrink-0 rounded object-cover" />
       ) : (
         <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded bg-[var(--color-primary-muted)] text-sm font-medium text-[var(--color-primary)]">
           {(preview.display_name ?? "?")[0]}

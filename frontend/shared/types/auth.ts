@@ -20,6 +20,12 @@ export interface AutoRefreshInfo {
   interval_days: number;
 }
 
+export interface OrgMembershipInfo {
+  org_id: string;
+  org_name: string;
+  role: string;
+}
+
 export interface MeResponse {
   id: string;
   email: string;
@@ -29,12 +35,14 @@ export interface MeResponse {
   quotas: QuotaInfo;
   person_enrich: PersonEnrichInfo;
   auto_refresh: AutoRefreshInfo;
+  org_memberships?: OrgMembershipInfo[];
 }
 
 export interface DevLoginRequest {
   email: string;
   display_name?: string;
   plan_tier?: PlanTier;
+  seed_org?: string;
 }
 
 export type PlanTier = "free" | "pro" | "enterprise";

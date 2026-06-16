@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     storage_backend: str = "local"  # local | r2
     local_upload_dir: str = "storage/uploads"
     api_base_url: str = "http://localhost:8001"
+    storage_public_base_url: str | None = None  # media CDN/origin; defaults to r2_public_url or api_base_url
 
     r2_account_id: str | None = None
     r2_access_key_id: str | None = None

@@ -10,6 +10,7 @@ export interface SearchStatus {
   /** Pro (DDR-71): personalized suggestions from indexed contacts. */
   sample_queries: string[];
   quotas: SearchQuotas;
+  public_pool_count?: number;
 }
 
 export interface MatchSource {
@@ -28,14 +29,26 @@ export interface ContactPreview {
   image_url: string | null;
 }
 
+export interface StubPreview {
+  display_name: string;
+  company_name: string;
+  title: string | null;
+  product_keywords: string[];
+}
+
 export interface SearchResultItem {
-  contact_id: string;
   rank: number;
   match_score: number;
   match_reason: string;
   match_sources: MatchSource[];
   source_pool: string;
-  contact_preview: ContactPreview;
+  contact_id?: string | null;
+  contact_preview?: ContactPreview | null;
+  stub_id?: string | null;
+  stub_preview?: StubPreview | null;
+  publisher_org_id?: string | null;
+  publisher_org_name?: string | null;
+  external_card_url?: string | null;
   live_products?: string[] | null;
 }
 
@@ -58,3 +71,5 @@ export interface SearchQueryResponse {
   results?: SearchResultItem[];
   empty_state?: SearchEmptyState;
 }
+
+export type SearchScope = "private" | "network" | "all";

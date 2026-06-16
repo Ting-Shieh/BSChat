@@ -27,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const switchPlan = useSwitchPlan();
   const { data: pending } = usePendingCount();
   const isPro = me?.plan_tier === "pro" || me?.plan_tier === "enterprise";
+  const isEnterprise = me?.plan_tier === "enterprise";
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
@@ -89,6 +90,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             設定
           </Link>
+          {isEnterprise && (
+            <Link
+              href="/admin/org"
+              className={cn(
+                "text-xs",
+                pathname.startsWith("/admin/org")
+                  ? "font-semibold text-[var(--color-primary)]"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]",
+              )}
+            >
+              公開目錄
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => {

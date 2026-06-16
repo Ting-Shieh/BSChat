@@ -12,6 +12,7 @@ const inputClass =
 const PLAN_OPTIONS: { id: PlanTier; label: string; hint: string }[] = [
   { id: "free", label: "Free", hint: "M3 推估 · 公司補全 · 有限額度" },
   { id: "pro", label: "Pro", hint: "含 LinkedIn 補充 · 較高配額" },
+  { id: "enterprise", label: "企業版", hint: "管理公開商務目錄 · 含 demo 種子" },
 ];
 
 /** 各方案預設 dev 帳號（分開 email 才有獨立聯絡人與額度） */
@@ -38,8 +39,13 @@ export function LoginForm() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     login.mutate(
-      { email, display_name: displayName, plan_tier: planTier },
-      { onSuccess: () => router.push("/contacts") },
+      {
+        email,
+        display_name: displayName,
+        plan_tier: planTier,
+        seed_org: planTier === "enterprise" ? "acme-demo" : undefined,
+      },
+      { onSuccess: () => router.push(planTier === "enterprise" ? "/admin/org" : "/contacts") },
     );
   }
 
@@ -47,7 +53,7 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
       <div>
         <p className="mb-2 text-sm font-medium text-[var(--color-text-primary)]">方案（開發用）</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {PLAN_OPTIONS.map((opt) => (
             <button
               key={opt.id}
