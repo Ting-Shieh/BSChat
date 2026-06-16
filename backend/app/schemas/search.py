@@ -34,6 +34,11 @@ class SearchResultItemDTO(BaseModel):
     match_sources: list[MatchSourceDTO]
     source_pool: str = "private_rolodex"
     contact_preview: ContactPreviewDTO
+    live_products: list[str] | None = None
+
+
+class LiveAugmentRequest(BaseModel):
+    contact_ids: list[UUID] | None = None
 
 
 class SearchEmptyStateDTO(BaseModel):

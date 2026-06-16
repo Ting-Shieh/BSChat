@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.entitlements import reset_search_cache_quota_if_needed
+from app.core.entitlements import reset_live_augment_quota_if_needed, reset_search_cache_quota_if_needed
 from app.ai.pipelines.search_intent import parse_intent
 from app.ai.pipelines.search_rerank import rerank_contacts
 from app.models.contact import Contact
@@ -15,6 +15,7 @@ from app.models.user import User, UserEntitlement
 from app.modules.m5_search.constraints import filter_rerank_results, has_hard_constraints
 from app.modules.m5_search.retrieval import CandidateDoc, candidate_to_dict, count_indexed, retrieve_candidates
 from app.modules.m5_search.sample_queries import pick_sample_queries
+from app.modules.m5_search.live_augment import should_suggest_live
 from app.modules.m5_search.validate import apply_confirmed_boost, validate_rerank_item
 from app.schemas.search import (
     ContactPreviewDTO,
@@ -31,6 +32,7 @@ async def get_search_status(db: AsyncSession, user: User) -> SearchStatusRespons
     indexed = await count_indexed(db, user.id)
     ent = user.entitlement
     await reset_search_cache_quota_if_needed(db, ent)
+    await reset_live_augment_quota_if_needed(db, ent)
     return SearchStatusResponse(
         indexed_count=indexed,
         can_search=indexed > 0,
@@ -219,6 +221,10 @@ async def execute_search(
     query_row.result_count = len(results_dto)
     query_row.latency_ms = latency_ms
     query_row.degraded = degraded
+    query_row.suggest_live = await should_suggest_live(
+        db, user, [c.contact_id for _, c in validated[:10]]
+    )
+    suggest_live_flag = query_row.suggest_live
     await db.commit()
 
     aha = not had_prior and len(results_dto) > 0
@@ -229,6 +235,7 @@ async def execute_search(
         latency_ms=latency_ms,
         degraded=degraded,
         aha_moment=aha,
+        suggest_live=suggest_live_flag,
         results=results_dto,
     )
 
@@ -297,6 +304,7 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
                 match_reason=row.match_reason,
                 match_sources=[MatchSourceDTO(**s) for s in row.match_sources or []],
                 contact_preview=_preview_from_candidate(cand),
+                live_products=row.live_products if row.live_products else None,
             )
         )
 
@@ -306,5 +314,6 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
         result_count=query_row.result_count,
         latency_ms=query_row.latency_ms,
         degraded=query_row.degraded,
+        suggest_live=query_row.suggest_live,
         results=items,
     )

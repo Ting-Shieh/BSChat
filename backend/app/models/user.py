@@ -47,6 +47,7 @@ class UserEntitlement(Base):
     search_cache_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     live_augment_monthly_quota: Mapped[int] = mapped_column(Integer, default=5)
     live_augment_used_this_month: Mapped[int] = mapped_column(Integer, default=0)
+    live_augment_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     daily_enrich_quota: Mapped[int] = mapped_column(Integer, default=50)
     daily_enrich_used: Mapped[int] = mapped_column(Integer, default=0)
     daily_enrich_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

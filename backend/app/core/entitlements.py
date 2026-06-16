@@ -109,6 +109,35 @@ async def consume_manual_refresh_quota(db: AsyncSession, ent: UserEntitlement) -
     return quota - ent.manual_refresh_used_this_month
 
 
+async def reset_live_augment_quota_if_needed(db: AsyncSession, ent: UserEntitlement) -> None:
+    now = datetime.now(UTC)
+    reset_at = ent.live_augment_reset_at
+    if reset_at is None or not _same_calendar_month(reset_at, now):
+        ent.live_augment_used_this_month = 0
+        ent.live_augment_reset_at = now
+        await db.flush()
+
+
+def live_augment_remaining(ent: UserEntitlement) -> int:
+    quota = ent.live_augment_monthly_quota
+    if quota < 0:
+        return -1
+    return max(0, quota - ent.live_augment_used_this_month)
+
+
+async def consume_live_augment_quota(db: AsyncSession, ent: UserEntitlement) -> int:
+    """Increment live-augment usage; returns remaining. Raises 429 if exhausted."""
+    await reset_live_augment_quota_if_needed(db, ent)
+    quota = ent.live_augment_monthly_quota
+    if quota < 0:
+        return -1
+    if ent.live_augment_used_this_month >= quota:
+        raise HTTPException(status_code=429, detail="LIVE_AUGMENT_QUOTA_EXCEEDED")
+    ent.live_augment_used_this_month += 1
+    await db.flush()
+    return quota - ent.live_augment_used_this_month
+
+
 async def reset_person_linkedin_quota_if_needed(db: AsyncSession, ent: UserEntitlement) -> None:
     now = datetime.now(UTC)
     reset_at = ent.person_linkedin_reset_at

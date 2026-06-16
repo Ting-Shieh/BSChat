@@ -39,6 +39,11 @@ export function SearchResultCard({
 
       <p className="mt-3 rounded-lg bg-[var(--color-ai-bg)] px-3 py-2 text-sm text-[var(--color-ai-text)]">
         {item.match_reason}
+        {item.live_products && item.live_products.length > 0 && (
+          <span className="ml-2 inline-block rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
+            即時查詢
+          </span>
+        )}
       </p>
 
       {(phone || email) && (

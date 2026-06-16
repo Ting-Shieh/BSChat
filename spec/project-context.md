@@ -1,6 +1,6 @@
 # Project Context — BSChat
 
-最後更新：2026-06-11
+最後更新：2026-06-16
 PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有效）→ 執行模式
 
 > 本檔由 `project-onboard` 於 2026-06-11 接手既有專案時重建。
@@ -35,6 +35,7 @@ PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有
 - 2026-05-20：個人職責理解分層 = Free 僅 M3 LLM 推估；Pro/Enterprise 才有 M3.5 LinkedIn+LLM（DDR-74）
 - 2026-06-03：M3.5 紅線 — **Pro 不得把 mock / 推論假資料標示為「LinkedIn 公開資料」**；來源以 `data_source` 動態標籤呈現
 - 2026-06-11：M3.5 資料來源與呈現 4+1 項拍板（pm-role · DDR-81~85）= 分區呈現 / 混合 fallback / 有 URL 讀不到不扣額度 / card_inference 免費 / data_source 採 6 類。皆對齊既有實作，紅旗 3 解除
+- 2026-06-15：Pro 定位 = Free（讓交換名片變有價值）＋「推薦合作的名片」（平台公開商務身份）。後者依賴企業帳號先發布 Pool B（DDR-76/77）→ 列 Stage 2、blocked-by 企業帳號。近期 Pro 可交付＝Stage 1（Layer3 live 查 + Pro 設定 UI）
 
 ## Spec 佈局表（AGENTS.md 路徑表的來源）
 
@@ -52,6 +53,8 @@ PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有
 
 ## 變更紀錄
 
+- 2026-06-16：Stage 1 開工 — **Pro 設定 UI**（`/settings`：方案、用量、auto-refresh、LinkedIn 自動補充）+ **M5 Layer3 live 查**（`POST /search/queries/:id/live-augment`、`query_augmentations` 表、`suggest_live` 觸發、扣 `live_augment` 額度、match_reason「即時查詢」標注；DDR-36 不寫 M6 cache）
+- 2026-06-15：Pro 產品定位收斂 + 分階段（PRD §11.5 細化）。Free＝「讓交換名片變有價值」；Pro＝＋「推薦可合作的名片（平台公開商務身份）」。**Pro 靈魂「推薦合作」依賴 Pool B，而 Pool B 只能由企業 Admin 發布（DDR-76/77）→ 必須等企業帳號**。階段：Stage 0（已完成 Pro 自己庫價值）/ Stage 1（可獨立做：Layer3 live 查 + Pro 設定 UI + E2E）/ Stage 2（⏳ 等企業帳號：M11 Pool B → M5b 跨池推薦）。M11/M5b 於 register 標 blocked-by 企業帳號。
 - 2026-06-11：M35-009 決策 — 官方 LinkedIn API **待審核未過，擱置**。Pro 上線資料來源僅靠：①有 URL → Gemini 公開搜尋（`linkedin_url_public`「○ 依連結公開摘要」）②無 URL → `card_inference`「○ 名片推估」。**mock/無官方 API 時永不輸出 ✦ LinkedIn**（紅旗 2 收斂為硬化 + 測試，非接 provider）。
 - 2026-06-11：`sa-sd-role`（模組模式）更新 `SA-SD_M35` v1.1 對齊 data_source 6 類動態標籤（紅旗 1 解除，R-35.7 作廢），並補 `ENG_M35` v1.0（Python，對齊實際 code；DDR-86~88）。M3.5 剩紅旗 2（mock 防冒充＋接真 provider）為純實作工作。
 - 2026-06-11：`pm-role` 拍板 M3.5 data_source 4+1 項決策（DDR-81~85），寫回 PRD §12.5.4、`BSChat_M35_data_source.md` §2/§3、module-register。M3.5 紅旗 3 解除；剩餘紅旗 1（SA-SD 對齊）轉 `sa-sd-role`、紅旗 2（mock 防冒充）為實作。

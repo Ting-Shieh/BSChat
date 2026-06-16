@@ -78,6 +78,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             {isPro ? "改 Free" : "試用 Pro"}
           </button>
+          <Link
+            href="/settings"
+            className={cn(
+              "text-xs",
+              pathname.startsWith("/settings")
+                ? "font-semibold text-[var(--color-primary)]"
+                : "text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]",
+            )}
+          >
+            設定
+          </Link>
           <button
             type="button"
             onClick={() => {

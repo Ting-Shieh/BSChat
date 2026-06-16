@@ -1,9 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { devLogin, fetchMe, switchPlan } from "./api";
+import { devLogin, fetchMe, switchPlan, updateSettings } from "./api";
 import type { PlanTier } from "@/shared/types/auth";
 import { useAuthStore } from "./store";
+
+export interface SettingsPayload {
+  auto_refresh_enabled?: boolean;
+  auto_refresh_interval_days?: number;
+  person_linkedin_auto_on_url?: boolean;
+}
 
 export function useMe() {
   const token = useAuthStore((s) => s.token);
@@ -36,6 +42,17 @@ export function useSwitchPlan() {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["contact"] });
+    },
+  });
+}
+
+export function useUpdateSettings() {
+  const token = useAuthStore((s) => s.token);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SettingsPayload) => updateSettings(token!, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me"] });
     },
   });
 }

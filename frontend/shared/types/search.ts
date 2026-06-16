@@ -36,6 +36,7 @@ export interface SearchResultItem {
   match_sources: MatchSource[];
   source_pool: string;
   contact_preview: ContactPreview;
+  live_products?: string[] | null;
 }
 
 export interface SearchEmptyState {

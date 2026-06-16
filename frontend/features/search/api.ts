@@ -19,3 +19,15 @@ export async function createSearchQuery(
 export async function fetchSearchQuery(token: string, queryId: string): Promise<SearchQueryResponse> {
   return apiFetch<SearchQueryResponse>(`/api/v1/search/queries/${queryId}`, { token });
 }
+
+export async function liveAugmentSearchQuery(
+  token: string,
+  queryId: string,
+  body?: { contact_ids?: string[] },
+): Promise<SearchQueryResponse> {
+  return apiFetch<SearchQueryResponse>(`/api/v1/search/queries/${queryId}/live-augment`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body ?? {}),
+  });
+}

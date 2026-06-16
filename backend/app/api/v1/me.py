@@ -9,6 +9,7 @@ from app.core.entitlements import (
     apply_plan_preset,
     manual_refresh_remaining,
     person_linkedin_remaining,
+    reset_live_augment_quota_if_needed,
     reset_manual_refresh_quota_if_needed,
     reset_person_linkedin_quota_if_needed,
     reset_search_cache_quota_if_needed,
@@ -72,6 +73,7 @@ async def get_me(
     await reset_search_cache_quota_if_needed(db, entitlement)
     await reset_manual_refresh_quota_if_needed(db, entitlement)
     await reset_person_linkedin_quota_if_needed(db, entitlement)
+    await reset_live_augment_quota_if_needed(db, entitlement)
     await db.flush()
     return _build_me(user, entitlement)
 
