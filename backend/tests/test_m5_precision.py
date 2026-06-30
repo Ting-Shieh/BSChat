@@ -15,6 +15,9 @@ from app.modules.m5_search.precision import (
 )
 from app.modules.m5_search.retrieval import CandidateDoc
 
+_INDEX_TASKS: list[asyncio.Task] = []
+_INDEX_ENQUEUED: set[uuid.UUID] = set()
+
 
 def _mock_retrieve_single(monkeypatch, contact_id: str, **kwargs) -> None:
     cid = uuid.UUID(contact_id)
@@ -62,10 +65,20 @@ def _sync_index(monkeypatch):
             await db.commit()
 
     def enqueue(contact_id: uuid.UUID) -> None:
-        asyncio.get_running_loop().create_task(_index_now(contact_id))
+        if contact_id in _INDEX_ENQUEUED:
+            return
+        _INDEX_ENQUEUED.add(contact_id)
+        _INDEX_TASKS.append(asyncio.create_task(_index_now(contact_id)))
 
     monkeypatch.setattr("app.modules.m3_contacts.upsert.enqueue_contact_index", enqueue)
     monkeypatch.setattr("app.workers.tasks.contact_index.enqueue_contact_index", enqueue)
+
+
+async def _flush_index_queue() -> None:
+    if _INDEX_TASKS:
+        await asyncio.gather(*_INDEX_TASKS)
+        _INDEX_TASKS.clear()
+    _INDEX_ENQUEUED.clear()
 
 
 def _noop_enrich(monkeypatch):
@@ -167,10 +180,7 @@ async def test_strict_precision_empty_when_llm_returns_nothing(monkeypatch):
         token = await _login(client, plan_tier="free")
         headers = {"Authorization": f"Bearer {token}"}
         contact_id = await _seed_contact(client, headers)
-
-        async with async_session_factory() as db:
-            await index_contact(db, uuid.UUID(contact_id))
-            await db.commit()
+        await _flush_index_queue()
 
         async def fake_intent(prompt: str, **kwargs):
             return """```json
@@ -220,11 +230,8 @@ async def test_balanced_keeps_semantic_match_below_old_threshold(monkeypatch):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         token = await _login(client, plan_tier="free")
         headers = {"Authorization": f"Bearer {token}"}
-        contact_id = await _seed_contact(client, headers,)
-
-        async with async_session_factory() as db:
-            await index_contact(db, uuid.UUID(contact_id))
-            await db.commit()
+        contact_id = await _seed_contact(client, headers)
+        await _flush_index_queue()
 
         async def fake_intent(prompt: str, **kwargs):
             return """```json
@@ -277,10 +284,7 @@ async def test_no_retrieval_fallback_when_no_match(monkeypatch):
         token = await _login(client, plan_tier="free")
         headers = {"Authorization": f"Bearer {token}"}
         contact_id = await _seed_contact(client, headers)
-
-        async with async_session_factory() as db:
-            await index_contact(db, uuid.UUID(contact_id))
-            await db.commit()
+        await _flush_index_queue()
 
         async def fake_intent(prompt: str, **kwargs):
             return """```json
@@ -325,10 +329,7 @@ async def test_search_debug_payload_when_enabled(monkeypatch):
         token = await _login(client, plan_tier="free")
         headers = {"Authorization": f"Bearer {token}"}
         contact_id = await _seed_contact(client, headers)
-
-        async with async_session_factory() as db:
-            await index_contact(db, uuid.UUID(contact_id))
-            await db.commit()
+        await _flush_index_queue()
 
         async def fake_intent(prompt: str, **kwargs):
             return """```json
