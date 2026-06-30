@@ -58,6 +58,40 @@ export interface SearchEmptyState {
   /** Pro (DDR-71): personalized suggestions from indexed contacts. */
   sample_queries: string[];
   cta?: { action: string; label: string } | null;
+  search_precision?: string | null;
+  precision_hint?: string | null;
+}
+
+export interface RetrievalCandidateDebug {
+  id: string;
+  label: string;
+  retrieval_score: number;
+}
+
+export interface PoolRetrievalDebug {
+  pool: string;
+  lexical_query: string;
+  semantic_query: string;
+  ts_hits: number;
+  trgm_extra_hits: number;
+  vector_hits: number;
+  widened: boolean;
+  top_candidates: RetrievalCandidateDebug[];
+}
+
+export interface SearchDebugInfo {
+  search_scope: string;
+  search_precision: string;
+  intent_prompt_version: string;
+  rerank_prompt_version: string;
+  semantic_query: string;
+  parsed_intent: Record<string, unknown>;
+  private?: PoolRetrievalDebug | null;
+  public?: PoolRetrievalDebug | null;
+  rerank_input_count: number;
+  result_count: number;
+  degraded: boolean;
+  latency_ms?: number | null;
 }
 
 export interface SearchQueryResponse {
@@ -70,6 +104,7 @@ export interface SearchQueryResponse {
   suggest_live?: boolean;
   results?: SearchResultItem[];
   empty_state?: SearchEmptyState;
+  debug?: SearchDebugInfo | null;
 }
 
 export type SearchScope = "private" | "network" | "all";

@@ -51,6 +51,8 @@ def _noop_company_enrich(monkeypatch):
 
 
 def _mock_search_llm(monkeypatch, contact_id: str):
+    _mock_retrieve_contact(monkeypatch, contact_id)
+
     async def fake_intent(prompt: str, **kwargs):
         return """```json
 {
@@ -85,6 +87,34 @@ def _mock_search_llm(monkeypatch, contact_id: str):
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
     monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
+
+
+def _mock_retrieve_contact(monkeypatch, contact_id: str) -> None:
+    from app.modules.m5_search.retrieval import CandidateDoc
+
+    cid = uuid.UUID(contact_id)
+    doc = CandidateDoc(
+        contact_id=cid,
+        display_name="Live Aug Test",
+        company_name="StaleTech Inc",
+        title="Sales Director",
+        responsibility_scope=None,
+        responsibility_confidence=None,
+        source_label=None,
+        review_status="pending_review",
+        phones=[],
+        emails=[],
+        image_url=None,
+        company_products=[],
+        products_confidence=None,
+        search_text="Live Aug Test | StaleTech Inc | Sales Director",
+        retrieval_score=0.6,
+    )
+
+    async def fake_retrieve(db, user_id, query_text, intent, limit=None):
+        return [doc], None
+
+    monkeypatch.setattr("app.modules.m5_search.service.retrieve_candidates", fake_retrieve)
 
 
 async def _seed_contact(client: AsyncClient, headers: dict) -> tuple[str, str]:

@@ -1,7 +1,8 @@
 # BSChat UI/UX — Module 5：AI 搜尋（對話式找商機）
 
-> **依據**：M5 PM L3 v1.1、M5 SA/SD v1.0、`BSChat_Design_Foundation.md`、M3 UI/UX v1.0  
-> **核心 UX 目標**：**10 分鐘內 Aha** — 用一句話找到「公司對、人對」的窗口，並**說清楚為何符合**
+> **版本**：v1.1  
+> **依據**：M5 PM L3 **v1.2**、`BSChat_PRD_v2.md` **v2.5** §11.8~9、M5 SA/SD v1.0、`BSChat_Design_Foundation.md`、M3 UI/UX v1.0  
+> **核心 UX 目標**：**10 分鐘內 Aha** — 用一句話找到「公司對、人對」的窗口，並**說清楚為何符合**；可信度可感知（精準度 + 來源 + 禁湊數）
 
 ---
 
@@ -78,10 +79,37 @@ flowchart TD
     H -->|僅參考| J[離開]
 ```
 
-### 1.6 Phase 3 預留（不阻塞 MVP）
+### 1.6 跨池搜尋（Pro+ · Stage 2 已實作）
 
-- Pool B 公開商務池：结果卡标注「BSChat 公開商務池 · {公司}」
-- MVP UI **不**显示 scope 切换器
+```mermaid
+flowchart TD
+    A[Pro+ 輸入 query] --> B[API search_scope=all]
+    B --> C[混排結果 private + public]
+    C --> D[每卡：來源 badge + match_reason + sources chips]
+    D --> E{使用者}
+    E -->|篩選| F[client：全部 / 僅我的 / 僅公開]
+    E -->|公開卡| G[前往外部名片 · 無電話 Email]
+    E -->|私人卡| H[詳情 / M8 複製]
+```
+
+- **搜尋 Tab 不放**搜尋前 scope 三按钮（DDR-M5-01）
+- 混排时 caption：「藍標 = 你的名片庫 · 綠標 = 公開商務」
+
+### 1.7 Account Hub — 搜尋偏好（M1 頁面 · M5 消費 · Stage 1b）
+
+```mermaid
+flowchart TD
+    A[我的 Tab /settings] --> B[搜尋偏好區塊]
+    B --> C{plan_tier}
+    C -->|Free| D[精準 / 平衡 可選]
+    C -->|Free| E[探索 🔒 + Pro CTA]
+    C -->|Pro+| F[精準 / 平衡 / 探索 可選]
+    D --> G[PATCH search_precision]
+    F --> G
+    G --> H[下次搜尋套用 rerank 严格度 prompt]
+```
+
+> 完整 Account Hub IA 见 PRD §11.8；本模块只定义**搜尋偏好**区块与 M5 结果页联动。
 
 ---
 
@@ -101,7 +129,7 @@ flowchart TD
 │  │                                 │  │
 │  │                      [搜尋]     │  │  ← Primary；Enter 送出
 │  └─────────────────────────────────┘  │
-│  5 位可搜尋 · 今日剩餘 28 次          │  ← indexed_count（Pool A）；MVP 文案不用「已索引」
+│  5 位可搜尋 · 公開商務 8 位 · 今日剩餘 28 次   │  ← Pro+：Pool A + Pool B 分開列（DDR-72）
 ├─────────────────────────────────────┤
 │         （尚無結果 — 留白）           │
 ├─────────────────────────────────────┤
@@ -129,7 +157,7 @@ flowchart TD
 │  └─────────────────────────────────┘  │
 ├─────────────────────────────────────┤
 │  ┌─ 助手 ─────────────────────────┐  │
-│  │  ● ● ●  正在比對你的名片庫…     │  │  ← typing indicator
+│  │  ● ● ●  正在比對你的名片庫與公開商務…  │  ← Pro+；Free：正在比對…
 │  └─────────────────────────────────┘  │
 ├─────────────────────────────────────┤
 │  ┌ skeleton SearchResultCard × 3 ┐  │
@@ -141,74 +169,73 @@ flowchart TD
 
 ---
 
-### 2.3 搜尋 Tab — 有結果（核心）
+### 2.3 搜尋 Tab — 有結果（核心 · v1.1）
 
 ```
 ┌─────────────────────────────────────┐
 │  ... Privacy Strip ...               │
 ├─────────────────────────────────────┤
 │  ┌ QueryBubble ────────────────────┐  │
-│  │ 我手上有誰做 IPC 的？             │  │  ← 用户 query，右对齐浅底
+│  │ 我手上有誰做 IPC 的？             │  │
 │  └─────────────────────────────────┘  │
 │  ┌ AssistantBubble ────────────────┐  │
-│  │ 找到 3 位可能符合的聯絡人          │  │
-│  │ degraded 时：小字「简化排序模式」   │  │
+│  │ 找到 3 位 · 1240ms               │  │
+│  │ [全部][僅我的][僅公開]  ← Pro+ 结果筛选 pill │
 │  └─────────────────────────────────┘  │
+│  ┌─ ⚠ DegradedBanner（若 degraded）─┐  │
+│  │ 簡化模式 · 結果僅供參考           │  │  ← DDR-100；非仅小字
+│  └─────────────────────────────────┘  │
+│  藍標 = 你的名片庫 · 綠標 = 公開商務    │  ← 混排时 hint
 ├─────────────────────────────────────┤
-│  ┌ SearchResultCard #1 ────────────┐  │
-│  │ [縮圖]  王小明          未確認     │  │  ← review badge
-│  │         ABC Tech                  │  │
-│  │         OEM 業務經理               │  │
+│  ┌ SearchResultCard — 私人 ────────┐  │
+│  │ [你的名片庫]                     │  │  ← 蓝 badge
+│  │ [縮圖]  王小明          未確認     │  │
+│  │         ABC Tech · OEM 業務經理   │  │
 │  │  ┌─ 符合原因 ──────────────────┐  │  │
-│  │  │ 公司主要產品包含工業電腦主機；   │  │  ← match_reason 主视觉
-│  │  │ 職稱為 OEM 業務經理            │  │  │
+│  │  │ 公司主要產品包含工業電腦主機…   │  │  │
 │  │  └──────────────────────────────┘  │  │
-│  │  🏷 Computex 2026                  │  │  ← source_label if in match
-│  │  [📋 複製電話]  [✉️ 複製 Email]    │  │  ← M8 P0
-│  │                          [查看 →]  │  │
+│  │  [工業電腦] [OEM 業務經理] [Computex]│  ← match_sources chips
+│  │  [📋 複製電話]  [✉️ 複製 Email]    │  │
 │  └───────────────────────────────────┘  │
-│  ┌ SearchResultCard #2 ────────────┐  │
-│  │ ...                               │  │
+│  ┌ SearchResultCard — 公開 ────────┐  │
+│  │ [公開商務 · Acme Demo]           │  │  ← 绿 badge；无复制电话
+│  │  陳志遠 · 工控科技 · PM           │  │
+│  │  ┌─ 符合原因 ──────────────────┐  │  │
+│  │  │ 職稱 PM；產品關鍵字含工控…     │  │  │
+│  │  └──────────────────────────────┘  │  │
+│  │  [前往外部名片]                    │  │
 │  └───────────────────────────────────┘  │
-├─────────────────────────────────────┤
-│  ┌─ 換個問法？ ─────────────────────┐  │  ← P1 refinement_suggestions
-│  │ · 只要 OEM 通路的                 │  │
-│  │ · 限定 Computex 2026              │  │
-│  └───────────────────────────────────┘  │
-├─────────────────────────────────────┤
-│  ┌ SearchInput（可追問 P1）─────────┐  │
-│  │ 💬 再問一個問題…          [送出]   │  │
-│  └─────────────────────────────────┘  │
 └─────────────────────────────────────┘
 ```
 
-**SearchResultCard 层级**：
-1. **match_reason**（必显，≥2 行 clamp 可展开）
-2. 姓名 / 公司 / 职称
-3. M8 行动按钮
-4. AI 推估来源若含 responsibility：chip「AI 推估 · 67%」
+**SearchResultCard 层级（更新）**：
+1. **来源 badge**（私人蓝 / 公开绿）
+2. **match_reason**（必显，可展开）
+3. **match_sources chips**（必显；有则展示）
+4. 姓名 / 公司 / 职称
+5. M8 行动（仅私人有 phone/email）
+6. 公开卡：**仅**外部链接 CTA
 
-**rank 不显示数字** — 避免「排名第几」的 CRM 感；顺序即优先级。
+**rank 不显示数字** — 顺序即优先级。
 
 ---
 
 ### 2.4 搜尋 Tab — 空結果
 
-**NO_MATCH**：
+**NO_MATCH**（含精準模式 EMPTY · Stage 1b）：
 ```
 ┌─────────────────────────────────────┐
 │  ┌ QueryBubble ────────────────────┐  │
 │  │ 我手上有誰做量子計算的？          │  │
 │  └─────────────────────────────────┘  │
 │  ┌ AssistantBubble ────────────────┐  │
-│  │ 目前名片庫裡沒有找到符合的聯絡人    │  │
-│  │ 這不代表你沒收過 — 試試換個說法    │  │
+│  │ 目前沒有找到符合的聯絡人            │  │
+│  │ 你目前為「精準」模式 — 可改「平衡」  │  │  ← 链 Account Hub 偏好
+│  │ 或（Pro）試試「探索」              │  │
 │  └─────────────────────────────────┘  │
-│        [illustration: 放大鏡+名片]     │
 │  試試這樣問：                          │
 │  · 我手上有誰做工業電腦的？             │
-│  · 我手上有誰做嵌入式系統的？           │
-│  [ 再搜一次 ]          [ 去收錄名片 ]   │
+│  [ 調整搜尋偏好 ]    [ 去收錄名片 ]     │
 └─────────────────────────────────────┘
 ```
 
@@ -284,7 +311,37 @@ flowchart TD
 
 ---
 
-### 2.8 P1 — Live Augment Banner
+### 2.9 Account Hub — 搜尋偏好（`/settings` · Stage 1b）
+
+```
+┌─────────────────────────────────────┐
+│  設定                                │
+├─────────────────────────────────────┤
+│  … 帳號摘要 / 用量 …                  │
+├─────────────────────────────────────┤
+│  搜尋偏好                            │
+│  調整結果要多嚴格（不影響你每次輸入     │
+│  的搜尋內容）                         │
+│                                      │
+│  ┌────────┬────────┬──────────────┐  │
+│  │ 精準   │ 平衡 ● │ 探索 🔒 Pro  │  │  ← Free：探索 disabled
+│  └────────┴────────┴──────────────┘  │
+│  精準：寧可找不到 · 平衡：日常使用 ·   │
+│  探索：更多可能相關（Pro）             │
+│                                      │
+│  [ Pro：放寬匹配，並搜尋公開商務 ]     │  ← Free only CTA
+└─────────────────────────────────────┘
+```
+
+| 状态 | UI |
+|------|-----|
+| Free + 探索 | 第三项 lock icon + 点击 → Pro pitch sheet |
+| Pro 选探索 | 正常保存；toast「已更新搜尋偏好」 |
+| 403 SEARCH_PRECISION_NOT_ALLOWED | inline 错误 + 回退 balanced |
+
+---
+
+### 2.10 P1 — Live Augment Banner
 
 **触发**：`suggest_live: true` 或用户点「深入查詢」
 
@@ -329,15 +386,32 @@ flowchart TD
 
 | 元素 | 数据源 | 规则 |
 |------|--------|------|
-| 缩图 | contact_preview.image_url | 无则 avatar |
-| 未确认 badge | review_status | `unconfirmed` 显示 |
+| 来源 badge | source_pool | `private_rolodex` → 蓝「你的名片庫」；`public_directory` → 绿「公開商務 · {org}」 |
+| 缩图 | contact_preview.image_url | 公开 stub 可无图；无则 avatar |
+| 未确认 badge | review_status | 仅私人；`unconfirmed` 显示 |
 | match_reason | results[].match_reason | 主区块；可展开 |
-| source chip | source_label | 若有 |
-| AI chip | match_sources | field=responsibility_scope 时 |
-| 复制按钮 | phones[0], emails[0] | M8；无则 hide |
-| 查看 | navigate |带 from_search |
+| match_sources chips | match_sources[] | **必显**（有则渲染）；field 映射见 PM L3.6 |
+| source chip | source_label | 若 match_sources 未含且 query 相关 |
+| 复制按钮 | phones[0], emails[0] | **仅私人**；M8 |
+| 外部链接 | external_card_url | **仅公开**；Primary CTA |
+| 查看 | navigate | 仅私人 → 详情；带 from_search |
 
-**点击区域**：整卡 → 详情；复制按钮 stopPropagation。
+**点击区域**：私人整卡 → 详情；公开卡仅链接可点外链。
+
+### 3.3b `DegradedSearchBanner`
+
+| prop | 规则 |
+|------|------|
+| visible | `degraded === true` |
+| 文案 | 「簡化模式 · 結果僅供參考」 |
+| 样式 | 全宽 alert；`--color-accent-muted`；非 AssistantBubble 小字 |
+
+### 3.3c `SearchResultFilterPills`（Pro+）
+
+| 值 | 行为 |
+|----|------|
+| all / private / network | client-side filter；不重打 API |
+| 筛选空 | 「此篩選沒有符合的結果」 |
 
 ### 3.4 `SearchEmptyState`
 
@@ -355,7 +429,17 @@ flowchart TD
 | open | aha_moment && !dismissed |
 | onDismiss | set localStorage |
 
-### 3.6 `SearchQuotaBanner`（429 / 403）
+### 3.7 `SearchPrecisionSelector`（Account Hub · Stage 1b）
+
+| 属性 | 规则 |
+|------|------|
+| 位置 | `/settings` 区块 3「搜尋偏好」 |
+| 选项 | strict / balanced / exploratory 三档 segmented |
+| Free | exploratory disabled + lock + Pro CTA |
+| 说明 | 一句：调整严格度，不保存业务方向 |
+| API | `PATCH /me/settings` `{ search_precision }` |
+
+### 3.8 `SearchQuotaBanner`（429 / 403）
 
 ```
 今日搜尋次數已用完（30/30）· 明天重置    [ 了解 Pro ]
@@ -372,7 +456,7 @@ flowchart TD
 | COMPLETED | ResultCard list |
 | EMPTY | SearchEmptyState |
 | FAILED | Error banner + 重试 |
-| degraded: true | AssistantBubble 小字 + 仍显示结果 |
+| degraded: true | **DegradedSearchBanner** 全宽 + 仍可显示结果（若 API 返回） |
 | suggest_live: true | LiveAugmentBanner（P1） |
 | aha_moment: true | AhaMomentModal |
 
@@ -418,7 +502,8 @@ flowchart TD
 |------|-----|------|
 | cache quota 用尽 | SearchQuotaBanner + disable 送出 | SEARCH_QUOTA_EXCEEDED 429 |
 | live quota 用尽 | Quota Dialog | LIVE_QUOTA_EXCEEDED 403 |
-| LLM degraded | 小字 + 结果仍显示 | degraded: true |
+| LLM degraded | DegradedSearchBanner | degraded: true |
+| SEARCH_PRECISION_NOT_ALLOWED | Settings inline | 403 |
 | 503 | Full-width Error + 重试 | SERVICE_UNAVAILABLE |
 | query 过长 | inline 错误 | QUERY_TOO_LONG 400 |
 | index stale hint | caption「部分新名片同步中」 | optional API field |
@@ -430,7 +515,11 @@ flowchart TD
 | 情境 | 文案 | 避免 |
 |------|------|------|
 | 就绪 caption | 「已收錄 N 位 · 可搜尋」 | 「索引完成」 |
-| loading | 「正在比對你的名片庫…」 | 「加载中」 |
+| loading | 「正在比對你的名片庫與公開商務…」（Pro+） | 「加载中」 |
+| degraded | 「簡化模式 · 結果僅供參考」 | 仅小字「简化排序」 |
+| 来源 badge 私人 | 「你的名片庫」 | 无标识 |
+| 来源 badge 公开 | 「公開商務 · {公司}」 | 显示电话 Email |
+| empty 精準 | 「可改平衡或（Pro）探索」 | 「没有数据」 |
 | 有结果 | 「找到 N 位可能符合的聯絡人」 | 「匹配成功」 |
 | match_reason 区标题 | 「符合原因」 | 「AI 推荐」 |
 | AI 推估 | 「可能負責 …（AI 推估 · n%）」 | 肯定句 |
@@ -464,7 +553,7 @@ flowchart TD
 | **M6** | match_reason 引用 products；P1 adopt → M6 UI 更新 |
 | **M8** | ResultCard 复制 CTA |
 | **M2** | empty → 收錄 Tab；Aha → 继续收錄 |
-| **M1** | quota banner、Pro CTA |
+| **M1** | quota banner、Pro CTA、**SearchPrecisionSelector** |
 
 ---
 
@@ -472,10 +561,11 @@ flowchart TD
 
 | 优先级 | UI 交付 |
 |--------|---------|
-| **P0** | Search Tab、Input、ResultCard、Empty、Aha、Context Banner、M8 复制 |
+| **P0** | Search Tab、Input、ResultCard（含 badge + sources chips）、Empty、Aha、Context Banner、M8 复制 |
+| **Stage 1b** | DegradedSearchBanner、禁 fallback UX、SearchPrecisionSelector、EMPTY 链偏好、FilterPills（Pro+） |
 | **P1** | Live banner、adopt flow、refinement chips、多轮输入（session） |
 | **P2** | 搜尋历史列表、桌面 split 优化 |
-| **P3** | Pool B 来源标注、Pro 跨池 scope gate |
+| **Done** | 跨池混排 + 来源 badge + 结果筛选（Stage 2） |
 
 ---
 
@@ -489,6 +579,9 @@ flowchart TD
 | `SearchEmptyState` | `components/search/SearchEmptyState.tsx` |
 | `AhaMomentModal` | `components/search/AhaMomentModal.tsx` |
 | `SearchContextBanner` | `components/contacts/SearchContextBanner.tsx` |
+| `DegradedSearchBanner` | `components/search/DegradedSearchBanner.tsx` (Stage 1b) |
+| `SearchResultFilterPills` | `components/search/SearchResultFilterPills.tsx` |
+| `SearchPrecisionSelector` | `features/settings/SearchPrecisionSelector.tsx` (Stage 1b) |
 | `LiveAugmentBanner` | `components/search/LiveAugmentBanner.tsx` (P1) |
 | `useSearchQuery` | `hooks/useSearchQuery.ts` — TanStack Query |
 
@@ -499,7 +592,7 @@ flowchart TD
 
 ---
 
-**M5 UI/UX v1.0：✅ 可锁定**
+**M5 UI/UX v1.1：✅ 可锁定（对齐 PRD v2.5）**
 
 ---
 
@@ -508,18 +601,17 @@ flowchart TD
 **State Tracker snapshot**：
 | 模組 | PM | SA/SD | UI/UX | ENG | QA |
 |------|:--:|:-----:|:-----:|:---:|:--:|
-| M5 | ✅ v1.1 | ✅ v1.0 | ✅ v1.0 | ⏳ | ⏳ |
+| M5 | ✅ v1.2 | ✅ v1.0 | ✅ v1.1 | ⏳ Stage 1b | ⏳ |
 
-**ENG 必須实现（P0）**：
-1. 搜尋 Tab + `GET /search/status` + `POST /search/queries`
-2. `SearchResultCard` + match_reason 区块
-3. `SearchEmptyState` 三种 reason
-4. `AhaMomentModal`
-5. M3 `SearchContextBanner` + from_search 路由
-6. M8 复制 on ResultCard
+**ENG 必須实现（Stage 1b · 对齐 PRD）**：
+1. `DegradedSearchBanner` + 移除 fallback 凑数结果（后端 + 空状态联动）
+2. `SearchResultCard` **match_sources chips**（私人 + 公开）
+3. `SearchPrecisionSelector` + `PATCH /me/settings` + M5 rerank 读 `search_precision`（DDR-101；非 min_match_score）
+4. EMPTY 精準模式 → 链「調整搜尋偏好」
+5. （已实作）跨池 badge + `SearchResultFilterPills`
 
-**Open（不阻塞 ENG P0）**：P1 live/adopt UI、P2 历史、桌面 split  polish
+**Open（不阻塞 Stage 1b）**：P1 live/adopt UI、P2 历史、embedding 召回 UI
 
 ---
 
-*UI/UX M5 v1.0 — SDLC Phase 1*
+*UI/UX M5 v1.1 — 2026-06-16 · PRD v2.5 Account Hub + 搜尋精準度*

@@ -62,17 +62,18 @@
         · parsed_intent JSON: { products[], roles[], events[], regions[], keywords[] }
         · 不写入 user profile（DDR-5）
         │
-        ▼ RETRIEVING
-[RetrievalService.search(userId, parsed_intent)]
-        · tsvector @@ websearch_to_tsquery('simple', built_query)
-        · pg_trgm fallback if ts hits < 5（B-14）
-        · JOIN contacts + latest company_enrichment
-        · top 50 candidates + retrieval_score
+        ▼ RETRIEVING（Layer A · DDR-101）
+[RetrievalService.hybridRetrieve(pool, parsed_intent, K=50)]
+        · 统一漏斗：全用户/全池规模同一算法；禁止按 contact_count 分支
+        · tsvector + pg_trgm（MVP）；+ pgvector RRF（P1）
+        · 产出 candidates[] + retrieval_score（仅用于池内排序/合并）
         │
-        ▼ RERANKING
-[RerankService.rerank(query, candidates)]  — Claude structured output
-        · top 5–10 + match_reason + match_sources[]
+        ▼ RERANKING（Layer B）
+[RerankService.rerank(query, candidates, search_precision)]
+        · top 5–10 + match_score + match_reason + match_sources[]
+        · search_precision → prompt 严格度；**不**服务端 min_match_score filter
         · validate sources ⊆ candidate fields（DDR-53）
+        · hard constraint filter（DDR-73）
         · apply confirmed +10% boost post-rerank（DDR-56）
         │
         ▼ COMPLETED | EMPTY
@@ -151,6 +152,39 @@ Contact upsert / CompanyEnriched / inference pass 2
 | 首次 ≥1 结果 | 200 + `aha_moment: true` | Aha 动画（DDR-10） |
 
 **Bootstrap**：`GET /search/status` 返回 `{ indexed_count, can_search, sample_queries[] }`。**MVP**：`sample_queries` 恒為 `[]`（DDR-71）；Pro P1 依索引名片填充，供個人化靈感 UI。
+
+### 2.6 检索契约与分数分工（DDR-101 · 2026-06-17）
+
+**统一漏斗**（私人 Pool A / 公开 Pool B 同一算法，仅 `WHERE` 与 entitlement 不同）：
+
+```
+POST /search/queries
+  → parse_intent (LLM)
+  → hybrid_retrieve(K=RETRIEVAL_TOP_K)   # 默认 50 / 池
+  → merge pools (cap RERANK_INPUT_MAX)   # 默认 60
+  → rerank (LLM + search_precision prompt)
+  → boundary: hard_constraints · validate_rerank_item · entitlement
+  → persist search_results (match_score) · return top RESULT_TOP_N (10)
+```
+
+**常数（ENG 可 env 覆盖，全用户一致）**：
+
+| 常数 | 默认 | 说明 |
+|------|------|------|
+| `RETRIEVAL_TOP_K` | 50 | 每池混合召回上限 |
+| `RERANK_INPUT_MAX` | 60 | 合并后送 rerank 上限 |
+| `RESULT_TOP_N` | 10 | API 返回条数 |
+
+**两种分数**：
+
+| 字段 | 阶段 | 写入 | 允许用途 | 禁止用途 |
+|------|------|------|----------|----------|
+| `retrieval_score` | Layer A | 内存 / 可选 debug | 召回排序；多路 RRF 合并；日志 | EMPTY 判定；替代 LLM |
+| `match_score` | Layer B | `search_results.match_score` | 最终排序；UI；跨池混排；QA | `if score < threshold: drop` |
+
+**`search_precision`**：注入 rerank system/user prompt（精準 / 平衡 / 探索），**不**映射 Python `min_match_score` filter（DDR-M5-02 废止）。
+
+**EMPTY**：LLM 返回 0、hard filter 后 0、无权搜池、degraded 无合格候选。**禁止**：因 Pilot 参考分（0.55 等）丢弃 LLM 已返回条目。
 
 ---
 

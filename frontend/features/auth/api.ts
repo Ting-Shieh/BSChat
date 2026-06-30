@@ -31,6 +31,7 @@ export async function updateSettings(
     auto_refresh_enabled?: boolean;
     auto_refresh_interval_days?: number;
     person_linkedin_auto_on_url?: boolean;
+    search_precision?: string;
   },
 ): Promise<MeResponse> {
   return apiFetch<MeResponse>("/api/v1/me/settings", {

@@ -7,6 +7,7 @@ class ParsedIntent(BaseModel):
     events: list[str] = Field(default_factory=list)
     regions: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    semantic_query: str | None = None
     hard_roles: list[str] = Field(default_factory=list)
     hard_companies: list[str] = Field(default_factory=list)
     hard_products: list[str] = Field(default_factory=list)

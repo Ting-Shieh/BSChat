@@ -22,9 +22,11 @@ from app.schemas.auth import (
     PersonEnrichInfo,
     PlanSwitchRequest,
     QuotaInfo,
+    SearchPrecisionInfo,
     SettingsUpdateRequest,
 )
 from app.modules.m11_public_directory.service import list_user_org_memberships
+from app.modules.m5_search.precision import can_use_exploratory, normalize_precision, validate_precision_update
 
 router = APIRouter()
 
@@ -62,6 +64,10 @@ def _build_me(user, entitlement: UserEntitlement, org_memberships: list[OrgMembe
         auto_refresh=AutoRefreshInfo(
             enabled=entitlement.auto_refresh_enabled,
             interval_days=entitlement.auto_refresh_interval_days,
+        ),
+        search_precision=SearchPrecisionInfo(
+            mode=normalize_precision(getattr(entitlement, "search_precision", None)),
+            can_use_exploratory=can_use_exploratory(entitlement.plan_tier),
         ),
         org_memberships=org_memberships,
     )
@@ -127,6 +133,12 @@ async def update_settings(
         if body.person_linkedin_auto_on_url and not is_pro:
             raise HTTPException(status_code=403, detail="PRO_REQUIRED")
         ent.person_linkedin_auto_on_url = body.person_linkedin_auto_on_url
+
+    if body.search_precision is not None:
+        try:
+            ent.search_precision = validate_precision_update(ent.plan_tier, body.search_precision)
+        except ValueError:
+            raise HTTPException(status_code=403, detail="SEARCH_PRECISION_NOT_ALLOWED")
 
     await db.commit()
     await db.refresh(ent)

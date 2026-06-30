@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     search_rerank_model: str = "claude-sonnet-4-20250514"
     search_result_limit: int = 10
     search_retrieval_limit: int = 50
+    search_rerank_input_max: int = 60
+    search_embedding_enabled: bool = True
+    search_embedding_model: str = "text-embedding-004"
+    search_embedding_dims: int = 768
+    search_embedding_use_mock: bool = False
+    search_embedding_fallback_mock: bool = True
+    search_embedding_timeout_s: float = 15.0
+    search_hybrid_rrf_k: int = 60
+    search_debug_enabled: bool = False
 
     # M3 responsibility inference
     inference_use_mock: bool = False

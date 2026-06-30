@@ -6,25 +6,31 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.entitlements import reset_live_augment_quota_if_needed, reset_search_cache_quota_if_needed
 from app.core.media_urls import public_media_url
-from app.ai.pipelines.search_intent import parse_intent
-from app.ai.pipelines.search_rerank import rerank_contacts
+from app.ai.pipelines.search_intent import INTENT_PROMPT_VERSION, parse_intent
+from app.ai.pipelines.search_rerank import PROMPT_VERSION as RERANK_PROMPT_VERSION, rerank_contacts
 from app.models.contact import Contact
 from app.models.organization import Organization
 from app.models.public_business_stub import PublicBusinessStub
 from app.models.search import SearchQuery, SearchResult
 from app.models.user import User, UserEntitlement
-from app.modules.m5_search.constraints import filter_rerank_results, has_hard_constraints
+from app.modules.m5_search.constraints import filter_rerank_results
+from app.modules.m5_search.precision import normalize_precision, precision_empty_hint
 from app.modules.m5_search.retrieval import (
     CandidateDoc,
+    PublicCandidateDoc,
     candidate_to_dict,
     count_indexed,
     count_public_published,
+    public_candidate_to_dict,
+    public_to_candidate_doc,
     retrieve_candidates,
     retrieve_public_candidates,
 )
-from app.modules.m5_search.public_search import ALLOWED_SEARCH_SCOPES, can_use_network_scope, rank_public_candidates
+from app.modules.m5_search.hybrid import PoolRetrievalDebug, build_semantic_query
+from app.modules.m5_search.public_search import ALLOWED_SEARCH_SCOPES, can_use_network_scope
 from app.modules.m5_search.sample_queries import pick_sample_queries
 from app.modules.m5_search.live_augment import should_suggest_live
 from app.modules.m5_search.validate import apply_confirmed_boost, validate_rerank_item
@@ -32,6 +38,9 @@ from app.schemas.search import (
     ContactPreviewDTO,
     CreateSearchQueryRequest,
     MatchSourceDTO,
+    PoolRetrievalDebugDTO,
+    RetrievalCandidateDebugDTO,
+    SearchDebugDTO,
     SearchEmptyStateDTO,
     SearchQueryResponse,
     SearchQuotasDTO,
@@ -39,6 +48,74 @@ from app.schemas.search import (
     SearchStatusResponse,
     StubPreviewDTO,
 )
+
+
+def _search_debug_enabled() -> bool:
+    settings = get_settings()
+    return settings.search_debug_enabled or settings.debug
+
+
+def _pool_debug_dto(pool: PoolRetrievalDebug | None) -> PoolRetrievalDebugDTO | None:
+    if pool is None:
+        return None
+    return PoolRetrievalDebugDTO(
+        pool=pool.pool,
+        lexical_query=pool.lexical_query,
+        semantic_query=pool.semantic_query,
+        ts_hits=pool.ts_hits,
+        trgm_extra_hits=pool.trgm_extra_hits,
+        vector_hits=pool.vector_hits,
+        widened=pool.widened,
+        top_candidates=[
+            RetrievalCandidateDebugDTO(
+                id=c.id,
+                label=c.label,
+                retrieval_score=c.retrieval_score,
+            )
+            for c in pool.top_candidates
+        ],
+    )
+
+
+def _build_search_debug(
+    *,
+    scope: str,
+    precision: str,
+    intent,
+    query_text: str,
+    private_debug: PoolRetrievalDebug | None,
+    public_debug: PoolRetrievalDebug | None,
+    rerank_input_count: int,
+    result_count: int,
+    degraded: bool,
+    latency_ms: int | None,
+) -> SearchDebugDTO | None:
+    if not _search_debug_enabled():
+        return None
+    return SearchDebugDTO(
+        search_scope=scope,
+        search_precision=precision,
+        intent_prompt_version=INTENT_PROMPT_VERSION,
+        rerank_prompt_version=RERANK_PROMPT_VERSION,
+        semantic_query=build_semantic_query(intent, query_text),
+        parsed_intent=intent.model_dump(),
+        private=_pool_debug_dto(private_debug),
+        public=_pool_debug_dto(public_debug),
+        rerank_input_count=rerank_input_count,
+        result_count=result_count,
+        degraded=degraded,
+        latency_ms=latency_ms,
+    )
+
+
+def _debug_from_stored(stored: dict | None) -> SearchDebugDTO | None:
+    if not stored or not _search_debug_enabled():
+        return None
+    raw = stored.get("search_debug")
+    if not raw:
+        return None
+    return SearchDebugDTO.model_validate(raw)
+
 
 async def get_search_status(db: AsyncSession, user: User) -> SearchStatusResponse:
     indexed = await count_indexed(db, user.id)
@@ -204,6 +281,7 @@ async def execute_search(
     started = time.perf_counter()
     intent = await parse_intent(body.query_text)
     degraded = False
+    ent = user.entitlement
 
     query_row = SearchQuery(
         user_id=user.id,
@@ -216,48 +294,59 @@ async def execute_search(
     db.add(query_row)
     await db.flush()
 
-    private_validated: list[tuple[object, CandidateDoc]] = []
-    if include_private and indexed > 0:
-        candidates = await retrieve_candidates(db, user_id=user.id, query_text=body.query_text, intent=intent)
-        candidate_map = {str(c.contact_id): c for c in candidates}
-        rerank_resp, priv_degraded = await rerank_contacts(
-            body.query_text,
-            [candidate_to_dict(c) for c in candidates],
-            intent,
-        )
-        degraded = degraded or priv_degraded
-        filtered = filter_rerank_results(rerank_resp.results, candidate_map, intent)
-        for item in filtered:
-            cand = candidate_map.get(item.contact_id)
-            if cand and validate_rerank_item(item, cand):
-                private_validated.append((item, cand))
-        if not private_validated and candidates and not has_hard_constraints(intent):
-            best_retrieval = max((c.retrieval_score or 0) for c in candidates)
-            if best_retrieval >= 0.12:
-                degraded = True
-                for c in candidates[:5]:
-                    private_validated.append(
-                        (
-                            type(
-                                "R",
-                                (),
-                                {
-                                    "contact_id": str(c.contact_id),
-                                    "match_score": c.retrieval_score or 0.4,
-                                    "match_reason": f"文字相關：{c.display_name} · {c.company_name or ''}",
-                                    "match_sources": [],
-                                },
-                            )(),
-                            c,
-                        )
-                    )
+    private_had_candidates = False
+    public_had_candidates = False
 
-    public_validated: list[tuple[object, object]] = []
+    private_candidates: list[CandidateDoc] = []
+    public_candidates: list[PublicCandidateDoc] = []
+    private_debug: PoolRetrievalDebug | None = None
+    public_debug: PoolRetrievalDebug | None = None
+    if include_private and indexed > 0:
+        private_candidates, private_debug = await retrieve_candidates(
+            db, user_id=user.id, query_text=body.query_text, intent=intent
+        )
+        private_had_candidates = bool(private_candidates)
     if include_public and public_pool > 0:
-        public_candidates = await retrieve_public_candidates(db, query_text=body.query_text, intent=intent)
-        pub_ranked, pub_degraded = await rank_public_candidates(body.query_text, public_candidates, intent)
-        public_validated = pub_ranked
-        degraded = degraded or pub_degraded
+        public_candidates, public_debug = await retrieve_public_candidates(
+            db, query_text=body.query_text, intent=intent
+        )
+        public_had_candidates = bool(public_candidates)
+
+    private_map = {str(c.contact_id): c for c in private_candidates}
+    public_map = {str(c.stub_id): c for c in public_candidates}
+    cand_map = {
+        **private_map,
+        **{sid: public_to_candidate_doc(pc) for sid, pc in public_map.items()},
+    }
+
+    merged_for_rerank: list[tuple[float, dict]] = []
+    for c in private_candidates:
+        merged_for_rerank.append((float(c.retrieval_score), candidate_to_dict(c)))
+    for c in public_candidates:
+        merged_for_rerank.append((float(c.retrieval_score), public_candidate_to_dict(c)))
+    merged_for_rerank.sort(key=lambda x: x[0], reverse=True)
+    rerank_input = [d for _, d in merged_for_rerank[: get_settings().search_rerank_input_max]]
+
+    precision = normalize_precision(ent.search_precision)
+    private_validated: list[tuple[object, CandidateDoc]] = []
+    public_validated: list[tuple[object, PublicCandidateDoc]] = []
+
+    if rerank_input:
+        rerank_resp, degraded = await rerank_contacts(
+            body.query_text,
+            rerank_input,
+            intent,
+            search_precision=precision,
+        )
+        filtered = filter_rerank_results(rerank_resp.results, cand_map, intent)
+        for item in filtered:
+            cand = cand_map.get(item.contact_id)
+            if not cand or not validate_rerank_item(item, cand):
+                continue
+            if item.contact_id in private_map:
+                private_validated.append((item, private_map[item.contact_id]))
+            elif item.contact_id in public_map:
+                public_validated.append((item, public_map[item.contact_id]))
 
     combined: list[tuple[str, float, object, object]] = []
     for item, cand in private_validated:
@@ -269,12 +358,24 @@ async def execute_search(
     combined = combined[:10]
 
     latency_ms = int((time.perf_counter() - started) * 1000)
+    debug_dto = _build_search_debug(
+        scope=scope,
+        precision=precision,
+        intent=intent,
+        query_text=body.query_text,
+        private_debug=private_debug,
+        public_debug=public_debug,
+        rerank_input_count=len(rerank_input),
+        result_count=0,
+        degraded=degraded,
+        latency_ms=latency_ms,
+    )
 
     if not combined:
         reason = "NO_MATCH"
         if scope == "network":
             reason = "NO_MATCH_PUBLIC"
-        elif indexed < 3:
+        elif indexed < 3 and not private_had_candidates and not public_had_candidates:
             reason = "LOW_INDEX_COUNT"
         suggestions = (
             ["再多收錄幾張名片，搜尋會更準", "試試以公司名稱或職稱描述你要找的人"]
@@ -287,6 +388,12 @@ async def execute_search(
         query_row.degraded = degraded
         stored = dict(query_row.parsed_intent or {})
         stored["empty_reason"] = reason
+        hint = precision_empty_hint(precision) if reason in ("NO_MATCH", "NO_MATCH_PUBLIC") else None
+        stored["search_precision"] = precision
+        if hint:
+            stored["precision_hint"] = hint
+        if debug_dto:
+            stored["search_debug"] = debug_dto.model_dump()
         query_row.parsed_intent = stored
         await db.commit()
         return SearchQueryResponse(
@@ -294,11 +401,14 @@ async def execute_search(
             status="EMPTY",
             latency_ms=latency_ms,
             degraded=degraded,
+            debug=debug_dto,
             empty_state=SearchEmptyStateDTO(
                 reason=reason,
                 suggestions=suggestions,
                 sample_queries=await pick_sample_queries(db, user),
                 cta={"action": "capture", "label": "去收錄名片"} if indexed < 3 and scope != "network" else None,
+                search_precision=precision,
+                precision_hint=hint,
             ),
         )
 
@@ -357,6 +467,11 @@ async def execute_search(
     query_row.degraded = degraded
     query_row.suggest_live = await should_suggest_live(db, user, private_ids) if private_ids else False
     suggest_live_flag = query_row.suggest_live
+    if debug_dto:
+        debug_dto = debug_dto.model_copy(update={"result_count": len(results_dto)})
+        stored = dict(query_row.parsed_intent or {})
+        stored["search_debug"] = debug_dto.model_dump()
+        query_row.parsed_intent = stored
     await db.commit()
 
     aha = not had_prior and len(results_dto) > 0
@@ -369,6 +484,7 @@ async def execute_search(
         aha_moment=aha,
         suggest_live=suggest_live_flag,
         results=results_dto,
+        debug=debug_dto,
     )
 
 
@@ -392,10 +508,14 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
             query_id=query_row.id,
             status="EMPTY",
             latency_ms=query_row.latency_ms,
+            degraded=query_row.degraded,
+            debug=_debug_from_stored(stored),
             empty_state=SearchEmptyStateDTO(
                 reason=reason,
                 suggestions=suggestions,
                 sample_queries=await pick_sample_queries(db, user),
+                search_precision=stored.get("search_precision"),
+                precision_hint=stored.get("precision_hint"),
             ),
         )
 
@@ -482,4 +602,5 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
         degraded=query_row.degraded,
         suggest_live=query_row.suggest_live,
         results=items,
+        debug=_debug_from_stored(query_row.parsed_intent),
     )

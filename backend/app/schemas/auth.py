@@ -32,6 +32,11 @@ class AutoRefreshInfo(BaseModel):
     interval_days: int
 
 
+class SearchPrecisionInfo(BaseModel):
+    mode: str = Field(description="strict | balanced | exploratory")
+    can_use_exploratory: bool = False
+
+
 class OrgMembershipInfo(BaseModel):
     org_id: UUID
     org_name: str
@@ -47,6 +52,7 @@ class MeResponse(BaseModel):
     quotas: QuotaInfo
     person_enrich: PersonEnrichInfo
     auto_refresh: AutoRefreshInfo
+    search_precision: SearchPrecisionInfo
     org_memberships: list[OrgMembershipInfo] = Field(default_factory=list)
 
 
@@ -58,3 +64,4 @@ class SettingsUpdateRequest(BaseModel):
     auto_refresh_enabled: bool | None = None
     auto_refresh_interval_days: int | None = Field(default=None, description="30 | 60 | 90")
     person_linkedin_auto_on_url: bool | None = None
+    search_precision: str | None = Field(default=None, description="strict | balanced | exploratory")

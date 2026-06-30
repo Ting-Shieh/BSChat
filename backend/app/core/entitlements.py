@@ -16,6 +16,7 @@ PLAN_PRESETS: dict[str, dict] = {
         "manual_refresh_quota_monthly": 3,
         "search_cache_daily_quota": 30,
         "live_augment_monthly_quota": 5,
+        "search_precision": "balanced",
     },
     "pro": {
         "person_enrich_mode": "linkedin_llm",

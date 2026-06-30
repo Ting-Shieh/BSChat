@@ -39,7 +39,30 @@ SEARCH_QUERY_MAX_LENGTH=2000
 SEARCH_RESULTS_RETENTION_DAYS=90
 # P1
 SEARCH_LIVE_ENABLED=false
+# DDR-101 统一漏斗（全用户同一常数）
+SEARCH_RETRIEVAL_TOP_K=50
+SEARCH_RERANK_INPUT_MAX=60
 ```
+
+### 1.1 检索契约与两种分数（DDR-101 · 对齐 SA/SD M5 §2.6）
+
+**Pipeline（禁止按 `indexed_count` 分支）**：
+
+1. `parse_intent` → `ParsedIntent`（含 P1 `semantic_query` 供 embedding）
+2. `hybrid_retrieve(pool, intent, K=SEARCH_RETRIEVAL_TOP_K)` → `CandidateDoc[]` + `retrieval_score`
+3. 跨池合并 cap `SEARCH_RERANK_INPUT_MAX`
+4. `rerank(query, candidates, search_precision)` → `RerankItem[]` + `match_score`
+5. `filter_rerank_results`：**仅** hard constraint + id 校验；**删除** `match_score < min` 分支
+6. `validate_rerank_item` → persist `search_results.match_score`
+
+| 分数 | Python 字段 | 持久化 | 允许 | 禁止 |
+|------|-------------|--------|------|------|
+| `retrieval_score` | `CandidateDoc.retrieval_score` | 否（可选 query debug） | 召回 ORDER BY；RRF 合并 | EMPTY gate；`effective_min_match_score` |
+| `match_score` | `RerankItem.match_score` → DB | `search_results.match_score` | 排序；API 响应；UI；`suggest_live` 阈值 | `filter_rerank_results` 硬过滤 |
+
+**废止模块逻辑**（实作迁移时删除）：`semantic_rescue` 整池 bypass、`is_weak_literal_recall`、`PRECISION_THRESHOLDS` / `effective_min_match_score`。
+
+**`search_precision`**：传入 `RERANK_PROMPT` 模板变量，不传 `min_match_score` 参数。
 
 ---
 

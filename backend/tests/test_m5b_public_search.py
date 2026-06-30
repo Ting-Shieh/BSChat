@@ -49,17 +49,72 @@ def _sync_public_index(monkeypatch):
     )
 
 
-async def _ensure_published_indexed() -> None:
+async def _ensure_published_indexed() -> uuid.UUID:
     from sqlalchemy import select
 
     from app.models.public_business_stub import PublicBusinessStub
 
+    stub_id: uuid.UUID | None = None
     async with async_session_factory() as db:
         result = await db.execute(
             select(PublicBusinessStub).where(PublicBusinessStub.status == "published")
         )
         for stub in result.scalars():
             await index_stub(db, stub.id)
+            stub_id = stub.id
+        await db.commit()
+    assert stub_id is not None
+    return stub_id
+
+
+def _mock_public_search_llm(monkeypatch, stub_id: uuid.UUID) -> None:
+    from app.modules.m5_search.retrieval import PublicCandidateDoc
+
+    sid = str(stub_id)
+    pub = PublicCandidateDoc(
+        stub_id=stub_id,
+        org_id=uuid.uuid4(),
+        org_name="Acme Demo",
+        display_name="張業務",
+        company_name="Acme Industrial",
+        title="業務經理",
+        responsibility_keywords=["嵌入式", "工業電腦"],
+        product_keywords=["嵌入式系統", "工業電腦"],
+        external_card_url="https://example.com/card",
+        search_text="Acme Industrial 嵌入式 工業電腦",
+        retrieval_score=0.7,
+    )
+
+    async def fake_retrieve_public(db, query_text, intent, limit=None):
+        return [pub], None
+
+    async def fake_intent(prompt: str, **kwargs):
+        return """```json
+{"products": ["工業電腦", "嵌入式"], "roles": [], "events": [], "regions": [],
+ "keywords": ["工業電腦", "嵌入式"], "hard_roles": [], "hard_companies": [], "hard_products": []}
+```"""
+
+    async def fake_rerank(prompt: str, **kwargs):
+        return f"""```json
+{{
+  "results": [
+    {{
+      "contact_id": "{sid}",
+      "match_score": 0.88,
+      "match_reason": "公開商務 · Acme Demo；張業務 · Acme Industrial，產品含嵌入式與工業電腦",
+      "match_sources": [{{"field": "company_products", "value": "嵌入式系統"}}]
+    }}
+  ]
+}}
+```"""
+
+    monkeypatch.setattr("app.modules.m5_search.service.retrieve_public_candidates", fake_retrieve_public)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
 
 @pytest.mark.asyncio
@@ -72,7 +127,8 @@ async def test_m5b_pro_network_search(monkeypatch):
             plan_tier="enterprise",
             seed_org="acme-demo",
         )
-        await _ensure_published_indexed()
+        stub_id = await _ensure_published_indexed()
+        _mock_public_search_llm(monkeypatch, stub_id)
 
         pro_token = await _login(client, plan_tier="pro")
         headers = {"Authorization": f"Bearer {pro_token}"}
@@ -117,7 +173,8 @@ async def test_m5b_all_scope_merges_pools(monkeypatch):
             plan_tier="enterprise",
             seed_org="acme-demo",
         )
-        await _ensure_published_indexed()
+        stub_id = await _ensure_published_indexed()
+        _mock_public_search_llm(monkeypatch, stub_id)
 
         pro_token = await _login(client, plan_tier="pro")
         headers = {"Authorization": f"Bearer {pro_token}"}

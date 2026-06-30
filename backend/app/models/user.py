@@ -58,6 +58,7 @@ class UserEntitlement(Base):
     person_linkedin_used_this_month: Mapped[int] = mapped_column(Integer, default=0)
     person_linkedin_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     person_linkedin_auto_on_url: Mapped[bool] = mapped_column(Boolean, default=False)
+    search_precision: Mapped[str] = mapped_column(String(20), default="balanced")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

@@ -1,8 +1,8 @@
 # BSChat PM L3 — Module 5：AI 搜尋（對話式找商機）
 
-> **版本**：v1.1  
-> **状态**：PM L3 ✅ 可锁定（MVP）；Phase 3 见附录  
-> **依据**：`BSChat_PRD_v2.md` v2.2 §2/§11/§13、DDR-5/58~62、M3/M6 LOCKED 契约
+> **版本**：v1.2  
+> **状态**：PM L3 ✅ 可锁定（MVP + Stage 1b 規格）；M5b 跨池已實作  
+> **依据**：`BSChat_PRD_v2.md` **v2.5** §2/§11.8~9/§13、DDR-5/58~62/73/96~100、M3/M6 LOCKED 契约
 
 ---
 
@@ -17,12 +17,15 @@
 - ❌ 固定「業務方向 profile」搜尋（DDR-5）
 - ❌ 精確姓名/公司關鍵字搜尋器
 - ❌ CRM pipeline 或商機管理
-- ❌ 跨使用者/公開人脈搜尋（**MVP**；Phase 3 见附录 · Pool B）
+- ❌ 跨 workspace / 團隊共享搜尋（Phase 2 Team）
+- ❌ 固定儲存業務方向 / 搜尋 profile（DDR-5）；**允許**持久化 `search_precision`（DDR-97）
 
 **是**：
 - ✅ 對話式、**即時意圖**的自然語言查詢
 - ✅ 排序結果 + **每位匹配理由**（公司產品 + 個人職責）
 - ✅ 以 M6 cache 為主、必要時 **query-time live 查**（DDR-34）
+- ✅ **Pro+** 跨池搜尋（Pool A + 公開 stub）；結果標來源（DDR-80）
+- ✅ 使用者可調 **搜尋精準度**（Account Hub · §11.9）；Free 分級開放（DDR-98）
 - ✅ 事件驅動；不要求養成每日使用習慣
 
 **成功標準（S-01）**：從「開始搜尋」到「找到可聯絡對象」< **2 分鐘**。
@@ -48,9 +51,14 @@
 | F-5.11 | 搜尋 refinement 建議 | P1 | 原 PRD | 結果過多時建議縮小（活動/產業） |
 | F-5.12 | 依 source_label 篩選 | P1 | S-02 | 「Computex 2026 認識的人」 |
 | F-5.13 | 多輪對話上下文 | P1 | — | 同一 session 追問「只要 OEM 的」 |
-| F-5.14 | pgvector 語意召回 | P1 | DDR-25 | MVP 可 tsvector-only；embedding P1 |
+| F-5.14 | pgvector 語意召回 | P1 | DDR-25 | 見 **F-5.22**；MVP tsvector-only |
 | F-5.15 | 搜尋歷史 | P2 | — | 近期查詢快速重跑 |
 | F-5.16 | 一鍵複製聯絡方式 | **P0** | S-04 | 委派 **M8**；M5 結果卡含 CTA |
+| F-5.18 | **搜尋精準度偏好**（strict / balanced / exploratory） | **P0** | US-5.3、§11.9 | Account Hub 持久化；Free 禁 exploratory；注入 **rerank prompt**（DDR-101） |
+| F-5.19 | **結果可信度**（禁 fallback 湊數 + degraded 路徑） | **P0** | DDR-99 | Rerank 無合格 → EMPTY；`degraded` 不套用探索門檻 |
+| F-5.20 | **match_sources chips** + 來源 pool badge | **P0** | DDR-100、US-5.2 | 「你的名片庫」vs「公開商務 · {公司}」；欄位 chip |
+| F-5.21 | **跨池搜尋 UX**（Pro+ 預設 `all`） | **P0** | Stage 2 | 一次搜尋混排；結果頁 client 篩選（全部/僅我的/僅公開） |
+| F-5.22 | pgvector + 混合召回（RAG） | P1 | DDR-25、§11.9 Stage 2 | tsvector + embedding + RRF；多切片待企業內容變厚 |
 
 **明確不做（MVP）**：
 - ❌ 固定儲存業務方向 / 搜尋 profile（DDR-5）
@@ -94,27 +102,24 @@ Layer C — Query-time Live（P1，Free 試用 / Pro 放寬）
   · 不持久化 profile（DDR-5）；不限于職稱字面（DDR-73）
     │
     ▼
-[Retrieval — Layer A]
-  · tsvector 全文（MVP P0）
-  · optional pgvector cosine（P1）
-  · filter: user_id, deleted_at IS NULL
-  · boost: company_products, responsibility_scope, title, company_name, source_label
+[Retrieval — Layer A]（统一漏斗 · DDR-101）
+  · LLM 精炼 intent → 混合召回 top-K（`RETRIEVAL_TOP_K=50` / 池；禁止按库大小分叉）
+  · tsvector + pg_trgm（MVP）；+ pgvector RRF（P1）
+  · filter: user_id / published stub；产出 retrieval_score
     │
     ▼
-[Rerank + Hard Constraint Filter — Layer B]
-  · LLM：对 top-K → 输出 top 5~10 + match_reason[]
+[Rerank — Layer B]
+  · LLM：对 top-K → 输出 top 5~10 + match_score + match_reason + match_sources[]
+  · **search_precision** → rerank prompt 严格度（§11.9；**不**服务端 min_match_score 过滤）
   · **硬條件不滿足 → 不得進入 results**（DDR-73）
-  · 跨欄位取證：職能←title∪responsibility_scope；產業←products∪company…
-  · 低信心 inference 不得当作事实陈述（DDR-9）
-    │
-    ▼
-{需要 Layer C?}
-  · 是 → live 查（受 quota）→ merge cache_products + live_products
-  · 否 → 直接返回
+  · **禁止 retrieval fallback 湊數**（DDR-99）：无 LLM 合格输出 → EMPTY
+  · 跨欄位取證；低信心 inference 不得当作事实陈述（DDR-9）
     │
     ▼
 [SearchResults UI]
-  · 结果卡：姓名、公司、匹配理由、信心提示
+  · 结果卡：来源 badge + match_reason + **match_sources chips**（DDR-100）
+  · degraded → 明显 banner「簡化模式」（非仅小字）
+  · Pro+：混排 private + public；结果页可选筛选
   · → 詳情（带 context）→ M8 複製
 ```
 
@@ -173,24 +178,27 @@ created_at, updated_at
 ```
 id, session_id?, user_id
 query_text
-parsed_intent       ← jsonb { products[], roles[], events[], ... }
+parsed_intent       ← jsonb { products[], roles[], events[], hard_*[], ... }
+search_scope        ← private | network | all（Pro+ 默认 all）
 retrieval_mode      ← cache|cache+live
 live_augmentation_used  ← bool
 status              ← 见 state machine
 result_count
 latency_ms
+degraded            ← LLM 离线路径
+suggest_live
 created_at
 ```
 
 ### SearchResult（append-only per query）
 
 ```
-id, query_id, contact_id
+id, query_id, contact_id?, stub_id?
 rank                ← 1..N
 match_score         ← 0.0-1.0
 match_reason        ← text（UI 显示）
 match_sources       ← jsonb [{ field, value, confidence }]
-  例：{ "field": "company_products", "value": "工業電腦", "confidence": 0.82 }
+source_pool         ← private_rolodex | public_directory
 live_products       ← jsonb nullable（Layer C merge）
 created_at
 ```
@@ -231,7 +239,7 @@ created_at
 | ID | 規則 |
 |----|------|
 | R-1 | **不儲存**固定業務方向；每次 query 獨立解析意圖（DDR-5） |
-| R-2 | 搜尋範圍（MVP）= **Pool A** 当前 user 的 private 名片庫（M7）；**不**含他人私人库（DDR-59） |
+| R-2 | 搜尋範圍：Free = Pool A only；**Pro+** = Pool A +（可选）Pool B；`search_scope` 默认 all（Pro+） |
 | R-3 | `pending_review` / `auto_accepted` 皆可被索引與搜尋（DDR-22） |
 | R-4 | 匹配理由必须引用 index 中实际字段；不可 hallucinate 产品 |
 | R-5 | M6 products conf < 0.5 不得作为高信心匹配理由 |
@@ -246,6 +254,11 @@ created_at
 | R-14 | 使用者**明確約束**（如「X 就好」「只要 X」）→ **硬條件**；不滿足不得返回（DDR-73） |
 | R-15 | 條件比對**跨欄位**：職能←`title`∪`responsibility_scope`；產業←`company_products`∪`company_name`；場合←`source_label`（DDR-73） |
 | R-16 | 禁止 `match_reason` 表述不符合卻仍列在結果中；寧可 NO_MATCH（DDR-73） |
+| R-17 | **`search_precision` 可持久化**（Account Hub）；**≠** 業務方向 profile（DDR-97） |
+| R-18 | Free 仅可选 strict / balanced；exploratory 需 Pro+（DDR-98） |
+| R-19 | rerank 无输出或 hard constraint 后 0 条 → **EMPTY**；禁止 retrieval 模板 fallback 凑数（DDR-99）；**禁止**以 `match_score` 硬门槛 silent 丢弃 LLM 结果（DDR-101） |
+| R-20 | `degraded=true` 时 UI 必须标注简化模式；fallback 路径之 score 仅供参考（DDR-100） |
+| R-21 | Pro+ 默认 `search_scope=all`；结果必须标注 source_pool（DDR-80） |
 
 ---
 
@@ -256,7 +269,7 @@ Upstream（M5 读取）
   M3 contact_search_documents  ← 主索引
   M3 contacts（详情跳转）
   M6 company_products（经 index 字段）
-  M1 user_entitlements         ← live quota
+  M1 user_entitlements         ← live/search quota；search_precision
 
 M5 核心输出
   SearchResults + match_reason
@@ -283,7 +296,7 @@ M5 不拥有
 | M6 enrich | `company_products` 写入 index |
 | M3 inference | `responsibility_scope` 写入 index |
 | M2 handoff | `source_label`, `raw_text` |
-| M1 | `user_id`, live/search quota |
+| M1 | `user_id`, live/search quota, **search_precision** |
 
 ### Downstream
 
@@ -305,7 +318,8 @@ M5 不拥有
 | 失敗 | 行為 | UX |
 |------|------|-----|
 | 0 contacts indexed | EMPTY + 引导收錄 | 「先收錄幾張名片」 |
-| LLM rerank 失败 | fallback tsvector 排序 | 仍显示结果，理由简化 |
+| LLM rerank 失败 | `degraded=true`；仍可用 mock 路径时 **不** 硬塞低分结果 | banner「簡化模式」；不套用探索门槛（DDR-99） |
+| 精準模式 0 结果 | EMPTY + 建议改平衡/探索(Pro) | 不降低门槛 silent 返回 |
 | live quota 用尽 | 仅 cache 结果 + CTA | 「本月即時查詢已用完」 |
 | index 延迟 | 新 Contact 暂不可搜 | 「資料同步中，稍后再试」 |
 | 全库无匹配 | EMPTY | 换问法建议 + 範例 query |
@@ -339,22 +353,34 @@ Acceptance Criteria:
 Acceptance Criteria:
 - Given 返回 3 笔, When 查看任一结果, Then 显示匹配理由（产品 + 职称/推估）
 - Given 推估 confidence < 0.6, When 生成理由, Then **不**以推估作为主要匹配依据
+- Given 结果含 match_sources, When 查看结果卡, Then 显示字段 chip（DDR-100）
+- Given 公开池结果, When 显示, Then badge「公開商務 · {公司}」且无电话/Email（DDR-80）
 
-**US-5.3 空結果不放棄（N-02）**
+**US-5.3 搜尋精準度偏好（Account Hub · PRD §11.9）**
+> As a B2B 業務代表, I want to 在「我的」設定搜尋要多精準, so that 我可以自己決定結果要嚴格還是寬鬆。
+
+Acceptance Criteria:
+- Given Free, When 设定 search_precision, Then 仅 strict / balanced 可存；exploratory → 403 或降 balanced（QA 锁定）
+- Given Pro, When 选 exploratory, Then rerank prompt 允许弱相关；仍禁 retrieval 模板 fallback（DDR-99、DDR-101）
+- Given strict 且无匹配, When 搜尋, Then EMPTY + 建议改平衡或（Pro）探索
+- Given degraded=true, When 搜尋, Then 不套用 exploratory 门槛
+- Given 变更 precision, When PATCH settings, Then 不写入业务方向 profile（DDR-5）
+
+**US-5.4 空結果不放棄（N-02）**
 > As a B2B 業務代表, I want to 搜尋沒結果時知道下一步, so that 我不會以為產品沒用。
 
 Acceptance Criteria:
 - Given 0 匹配, When 搜尋完成, Then 显示「試試換個說法」+ 範例 + 「去收錄名片」CTA
 - Given 仅 1-2 张名片, When 搜尋, Then 可提示「再多收幾張，搜尋會更準」
 
-**US-5.4 Aha 首次搜尋（DDR-10）**
+**US-5.5 Aha 首次搜尋（DDR-10）**
 > As a 新用戶, I want to 收錄幾張名片後立刻試搜, so that 我能在 10 分鐘內感受到價值。
 
 Acceptance Criteria:
 - Given ≥3 OCR 完成, When 进入搜尋 Tab, Then 显示範例 query + 可输入
 - Given 首次 ≥1 结果, When 完成, Then 计 Aha moment（M9）
 
-**US-5.5 即時深入查詢（P1，Free 試用 / Pro）**
+**US-5.6 即時深入查詢（P1，Free 試用 / Pro）**
 > As a B2B 業務代表, I want to 在搜尋時必要時查最新公司資料, so that 過期 cache 不會讓我錯過商機。
 
 Acceptance Criteria:
@@ -362,7 +388,7 @@ Acceptance Criteria:
 - Given 用户点「採用並儲存」, When 确认, Then 写入 M6 cache（query_adopt）
 - Given Free 月度 live 5 次用尽, When 再请求, Then 403 + 升级 CTA
 
-**US-5.6 找到後立刻行動（→ M8）**
+**US-5.7 找到後立刻行動（→ M8）**
 > As a B2B 業務代表, I want to 从搜尋結果複製電話或 Email, so that 我可以立刻聯絡。
 
 Acceptance Criteria:
@@ -370,34 +396,60 @@ Acceptance Criteria:
 
 ---
 
-## L3.11 — 付費分層（M5 部分）
+**US-5.8 跨池搜尋（Pro+ · Stage 2 已實作）**
+> As a Pro 使用者, I want to 一次搜尋同時看到我的名片庫與公開商務身份, so that 我不必先选 pool 再搜两次。
 
-| 能力 | Free | Pro |
-|------|------|-----|
-| Cache 搜尋（Layer A+B） | ✅ 建议 ≥30 次/日 | ✅ 较高 |
-| 個人化搜尋建議（靈感 chips） | ❌ | ✅ P1（依索引名片推導） |
-| Query-time live（Layer C） | 5 次/月 | 较高（Pilot 定） |
-| 多轮对话（P1） | ✅ | ✅ |
-| 搜尋历史（P2） | — | P2 |
-
-M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 stub）。
+Acceptance Criteria:
+- Given Pro, When 搜尋, Then 默认 search_scope=all；结果混排并标注来源
+- Given 混合结果, When 列表, Then 可选 client 筛选（全部/僅我的/僅公開）
+- Given Free, When search_scope=network|all, Then 403 SEARCH_SCOPE_NOT_ALLOWED
 
 ---
 
-## L3.12 — UI 约束（移交 UI/UX）
+## L3.11 — 付費分層（M5 部分 · 对齐 PRD §11.3 D / §11.9）
+
+| 能力 | Free | Pro | 企業版 |
+|------|:----:|:---:|:------:|
+| Cache 搜尋（Layer A+B） | ✅ ≥30 次/日 | ✅ 较高 | ✅ 最高 |
+| 搜尋精準度：精準 / 平衡 | ✅ | ✅ | ✅ |
+| 搜尋精準度：探索 | 🔒 预览+CTA | ✅ | ✅ |
+| 自訂 min_match_score 滑桿 | ❌ | ❌ | 🚧 Admin 组织默认 P2 |
+| 個人化搜尋建議 chips | ❌ | ✅ P1 | ✅ |
+| 跨池搜尋（Pool B） | ❌ | ✅ | ✅ |
+| Query-time live（Layer C） | 5 次/月 | 较高 | 较高 |
+| match_sources chips + 禁 fallback | ✅ | ✅ | ✅ |
+| 多轮对话（P1） | ✅ | ✅ | ✅ |
+| 搜尋历史（P2） | — | P2 | P2 |
+
+**Account Hub 搜尋偏好**（M1 UI · M5 消费）：见 PRD §11.8~9；设置页非搜尋 Tab。
+
+M1 管 quota + `search_precision`；M5 读取 `EntitlementService` + user settings（DDR-39 stub）。
+
+---
+
+## L3.12 — UI 约束（移交 UI/UX · 含 Stage 1b）
 
 **搜尋 Tab 默认**（Design Foundation §2.2）
 
 | 元素 | 規則 |
 |------|------|
-| 输入框 | 多行 textarea；**中性 placeholder**（如「用自然語言描述你要找的人或情境…」） |
-| 靈感 chips | **MVP 不顯示**；Pro P1 見 F-5.17 / DDR-71 |
-| 可搜尋人數 | 顯示 **「X 位可搜尋」**（= Pool A `indexed_count`）；**不**並列「已索引 vs 聯絡人總數」（DDR-72） |
-| 送出 | Primary；loading typing indicator |
-| 结果列表 | Contact 卡 + match_reason 区块 |
-| 空状态 | 引導收錄或換問法（`suggestions` 文案）；**不用**通用產業範例 chips |
-| 0 结果 | 换问法 + 收錄 CTA |
+| 输入框 | 多行 textarea；**中性 placeholder** |
+| 搜尋前 scope tab | **不显示**（Pro+ 默认 all；DDR-96 后 UX 决策） |
+| 靈感 chips | MVP 不显示；Pro P1 见 F-5.17 / DDR-71 |
+| 可搜尋人數 | Pool A `indexed_count`；Pro+ 另列公开商务人数（DDR-72） |
+| 结果列表 | 来源 badge + Contact/stub 卡 + match_reason + **match_sources chips** |
+| 结果筛选 | Pro+ 有结果后：全部 / 僅我的 / 僅公開（client-side） |
+| degraded | **Banner**「簡化模式，結果僅供參考」+ 小字 latency（DDR-100） |
+| 空状态 | 引導收錄或换问法；精準模式 EMPTY 可建议改平衡/升级 Pro |
 | Privacy Strip | 常显「預設私人」 |
+
+**Account Hub「我的 → 搜尋偏好」**（M1 页面 · M5 字段）
+
+| 元素 | 規則 |
+|------|------|
+| 三档选择 | 精準 / 平衡 / 探索（segmented control） |
+| Free 探索 | 可见 locked + Pro CTA 文案（DDR-98） |
+| 说明 | 一句解释「不影响你每次输入的搜尋内容，只调整结果严格度」 |
 
 **从 M5 进详情**：顶部 Context Banner「符合原因：…」（M3 UIUX 已预留）
 
@@ -414,13 +466,17 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 | DDR-55 | 0 结果 = 产品机会，必须引导收錄/换问法 |
 | DDR-56 | confirmed contact +10% rank boost |
 | DDR-57 | 搜尋不锁 Free 基本 cache 能力（Aha Moment） |
-| DDR-58 | Pool A/B 分离；MVP 仅 A（见 PRD §13） |
+| DDR-58 | Pool A/B 分离；**M5b 跨池已实作**（Pro+） |
 | DDR-59 | 禁止搜他人私人收錄聯絡人 |
 | DDR-71 | MVP 不顯示通用靈感 chips；Pro 個人化建議依索引名片推導（見 PRD v2） |
 | DDR-72 | UI 用「可搜尋」= Pool A indexed_count；庫外/Pool B 不共用「已索引」；刪除聯絡人同步遞減（見 PRD v2） |
 | DDR-73 | 多維度查詢條件 + 硬/軟約束；跨欄位匹配；不符合不返回（見 PRD v2） |
+| DDR-96~100 | Account Hub、搜尋精準度分級、禁 fallback、match_sources / degraded UI（PRD §11.8~9） |
+| DDR-M5-01 | Pro+ 默认 search_scope=all；搜尋 Tab 不放 scope 切换器 |
+| DDR-M5-02 | ~~search_precision → min_match_score~~ **已废止** → 改 **search_precision → rerank prompt**（DDR-101） |
+| DDR-M5-03 | **两种分数分工**：`retrieval_score`（召回排序）vs `match_score`（rerank 排序/展示/QA）；均不得作 EMPTY 硬门槛（DDR-101） |
 
-*DDR-5/34/36/70 见 PRD v2；DDR-25 见 M3 SA/SD*
+*DDR-5/34/36/70/80 见 PRD v2.5；DDR-25 见 M3 SA/SD*
 
 ---
 
@@ -463,28 +519,28 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 
 ---
 
-## 附录 — Phase 3：M5b 跨池搜尋（PRD §13 · 不阻塞 MVP）
+## 附录 A — M5b 跨池搜尋（**Stage 2 已實作** · PRD §13）
 
-> **产品决策（v2.2）**：不搜别人的人脉；只搜**自愿公开**的商務身份。  
-> 企业合作：Enterprise 订阅 → M11 建立员工公开商務身份 → 进入 **Pool B**；**Pro** 可搜。
+> **状态（2026-06-16）**：后端 M5b + M11 Pool B 已实作；Pro+ `search_scope=network|all`；UI 混排 + 结果筛选。
 
 ### 两个搜索池
 
-| Pool | 内容 | MVP | Phase 3 |
-|------|------|-----|---------|
-| **A — Private Rolodex** | 自己收錄的名片 | ✅ M5 P0 | ✅ |
-| **B — Public Directory** | 企业/个人自愿公开的商務身份 | ❌ | ✅ M5b + M11 |
+| Pool | 内容 | 状态 |
+|------|------|------|
+| **A — Private Rolodex** | 自己收錄的名片 | ✅ |
+| **B — Public Directory** | 企业 Admin 发布的公开商务 stub | ✅ M11 MVP |
 
-### Phase 3 Sub-features（规划）
+### 已实现 Sub-features
 
-| # | Sub-feature | 优先 |
+| # | Sub-feature | 状态 |
 |---|-------------|------|
-| F-5.17 | `search_scope`：private / network / all | P3 |
-| F-5.18 | 结果分来源标注（你的库 vs 公开池 · 公司名） | P3 |
-| F-5.19 | Pro 跨池搜尋 quota（M1） | P3 |
-| F-5.20 | Free 时 teaser「公开池有 N 条匹配，升级 Pro」 | P3 optional |
+| F-5.21 | Pro+ 默认 `search_scope=all`；结果标注 source_pool | ✅ |
+| F-5.20 | 私人「你的名片庫」/ 公开「公開商務 · {公司}」badge | ✅ |
+| — | 结果页 client 筛选（全部/僅我的/僅公開） | ✅ |
+| F-5.19 | 禁 fallback 硬塞（Stage 1b 待实作） | 🚧 |
+| F-5.18 | Account Hub search_precision | 🚧 Stage 1b |
 
-### Phase 3 Rules
+### Phase 3 Rules（仍有效）
 
 | ID | 规则 |
 |----|------|
@@ -493,31 +549,31 @@ M1 管 quota 字段；M5 读取 `EntitlementService`（同 M6 模式，DDR-39 st
 | R-P3-3 | 员工下架 → 24h 内从 Pool B index 移除 |
 | R-P3-4 | Free **只搜 Pool A**；Pro / 企業版 可含 Pool B（DDR-61） |
 
-### MVP 预留（SA/SD 低成本）
-
-```typescript
-// SearchRequest — MVP 默认
-search_scope: 'private'  // Phase 3: 'network' | 'all'
-
-// SearchResult — MVP 默认
-source_pool: 'private_rolodex'  // Phase 3: 'public_directory'
-publisher_org_id?: string
-```
-
-### 模块耦合（Phase 3）
+### 模块耦合
 
 | 模块 | 关系 |
 |------|------|
-| **M11** | Pool B 数据 owner；企业电子名片 CRUD + 发布 |
-| **M1** | `plan_tier`: free / pro / enterprise |
-| **M5b** | 跨池检索 + rerank + explain（复用 Layer A/B pipeline） |
-| **M6** | 公开池公司资料 enrich（可共享 pipeline） |
-
-*完整愿景：`BSChat_PRD_v2.md` §13、§11.5*
+| **M11** | Pool B owner |
+| **M1** | plan_tier + search_precision entitlement |
+| **M5b** | 跨池检索 + rerank + explain（复用 Layer A/B） |
 
 ---
 
-**M5 PM L3：✅ 可鎖定**
+## 附录 B — Stage 1b 交付范围（Next）
+
+| 项 | 模块 | 说明 |
+|----|------|------|
+| 关 fallback + EMPTY 诚实化 | M5 ENG | DDR-99 |
+| match_sources chips + degraded banner | M5 UI | DDR-100 |
+| Account Hub 搜尋偏好 | M1 UI + API | `PATCH /me/settings` |
+| search_precision → rerank prompt | M5 ENG | 读 user settings（DDR-101） |
+| PM/QA 用例 | M5 QA | Free/Pro precision matrix |
+
+*完整愿景：`BSChat_PRD_v2.md` §11.8~9*
+
+---
+
+**M5 PM L3：✅ 可鎖定（v1.2）**
 
 ---
 
@@ -533,4 +589,4 @@ publisher_org_id?: string
 
 ---
 
-*PM M5 L3 v1.0 — SDLC Phase 1*
+*PM M5 L3 v1.2 — 2026-06-16 · 对齐 PRD v2.5（Account Hub + 搜尋精準度 + Stage 1b）*

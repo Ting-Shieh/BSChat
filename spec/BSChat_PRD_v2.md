@@ -138,7 +138,7 @@ v2 訪談揭示的真實需求是：
 | N-05 | AI 補全公司產品常錯 | 不再信任搜尋結果 | 核心價值失效 | 顯示資料來源；允許使用者拒絕/覆寫 |
 | N-06 | 收錄流程太複雜（>10 分鐘） | onboarding 放棄 | 無資料可搜 | 連拍零必填；延後最低確認 |
 | N-07 | 要求當場補備註 / 分類 | 使用者不做 | 資料品質差 | 不要求；AI 自動補 |
-| N-08 | 固定業務方向設定過期 | 設定無效 | 搜尋結果偏離 | 對話式即時意圖，不固定儲存 |
+| N-08 | 固定業務方向設定過期 | 設定無效 | 搜尋結果偏離 | 對話式即時意圖，不固定儲存 profile；**搜尋精準度偏好**除外（見 DDR-96~100） |
 
 ---
 
@@ -173,6 +173,12 @@ v2 訪談揭示的真實需求是：
 | DDR-74 | **個人職責理解分層**：Free = M3 LLM 推估（title + company + M6 products）；Pro/Enterprise = 可加 **M3.5 LinkedIn + LLM** 個人公開資料補充；Free **永不**觸發外部 people search | 持續 API 成本與錯人風險應付費；Free 仍保留 Aha（公司 + 推估）；LinkedIn 資料經第三方/API，非 M6 公司 enrich | M3、M3.5、M1 |
 | DDR-75 | M3.5 **不自動對全庫 silent 搜人**；僅：① 名片/import 含 `linkedin_url` 且 Pro ② 使用者手動「LinkedIn 補充」③ Enterprise 可配置 batch（Phase 2）；`match_score < 0.8` 不寫入 Contact | 同名消歧與合規；寧可提示確認也不錯人寫庫 | M3.5、M1 |
 | DDR-76 | M3.5 成功結果 **不覆寫** OCR `title`；寫入 `person_responsibility_scope`（或增強 `responsibility_scope`）並標 `provenance=linkedin`；M5 硬匹配需 `person_match_score ≥ 0.8` 且 confidence ≥ 0.75 | 名片為交換快照；LinkedIn 為補充視角 | M3.5、M5、M3 |
+| DDR-96 | **「我的」為三方案共用 Account Hub**（`/settings` 或 App「我的」Tab）；依 `plan_tier` **顯示/隱藏區塊**，非三套獨立 App | 設定集中、方案差異可見；避免 Free 無入口 | M1、UI |
+| DDR-97 | **搜尋精準度**（strict / balanced / exploratory）為**搜尋嚴格度偏好**，可持久化於使用者設定；**不等於**業務方向 profile（延續 DDR-5） | 使用者需控制「要多準 vs 多給可能」；與對話式即時意團並存 | M5、M1 |
+| DDR-98 | **Free 開放「精準 + 平衡」**；**「探索」鎖 Pro+**（UI 可預覽 + 升級 CTA）；**自訂分數 / 組織預設**鎖企業版 Admin（P2） | 兼顧留存（Free 可調基本精準度）與付費誘因（放寬匹配 + 跨池在同一價值線） | M1、M5 |
+| DDR-99 | **禁止 retrieval fallback 湊數**（如模板「文字相關」+ 固定 0.35 分硬塞 results）；`match_score` **不得**作為服务端 EMPTY 的硬門檻（見 DDR-101）；LLM 離線（`degraded`）時寧可 EMPTY + 說明，不硬塞假結果 | 消除「模糊比對感」；信任 > 湊數 | M5 |
+| DDR-100 | 搜尋結果 UI 必須展示 **match_sources chips**；`degraded=true` 時明顯標「簡化模式／結果僅供參考」 | 讓 AI 感可感知、降級可解釋 | M5 UI |
+| DDR-101 | **M5 统一检索漏斗**（全用户、全池规模同一 pipeline）：① LLM 精炼 intent → ② DB 混合召回 top-K（固定 `RETRIEVAL_TOP_K`，禁止按名片库大小分叉）→ ③ LLM rerank → ④ 后端只守边界（权限、hard constraint、schema 校验）。**两种分数分工**：`retrieval_score` 仅用于召回池内排序/合并；`match_score` 仅用于 rerank 后排序、展示、日志/QA——**均不得**单独决定「有没有结果」。`search_precision` 注入 rerank prompt，**不**映射 `min_match_score` 过滤 | 问法再怪仍由 AI 理解；行为可量化、可复测 | M5 |
 
 ---
 
@@ -248,6 +254,26 @@ Acceptance Criteria:
 
 Acceptance Criteria:
 - Given 搜尋回傳 3 筆結果, When 我查看任一結果, Then 顯示匹配理由（例如：「公司主要產品包含工業電腦主機；此人職稱為 OEM 業務經理（AI 推估）」）
+- Given 結果含結構化依據, When 我查看結果卡, Then 顯示 **match_sources** 欄位 chip（職稱、公司產品、職責推估等 · DDR-100）
+
+**US-5.3 搜尋精準度偏好（Account Hub）**
+> As a B2B 業務代表, I want to 在「我的」設定搜尋要多精準, so that 我可以自己決定結果要嚴格還是寬鬆，而不必每次換問法試運氣。
+
+Acceptance Criteria:
+- Given Free 使用者, When 進入「我的 → 搜尋偏好」, Then 可選 **精準** 或 **平衡**；**探索**顯示鎖定 + Pro 升級說明（DDR-98）
+- Given Pro 使用者, When 選 **探索**, Then 搜尋允許較低 `match_score` 門檻（仍禁止低分 fallback 模板結果 · DDR-99）
+- Given 使用者選 **精準**, When 無人達門檻, Then 回傳 EMPTY + 建議放寬精準度或換問法（不硬塞無關結果）
+- Given `degraded=true`（LLM 離線）, When 搜尋, Then UI 標「簡化模式」；fallback 分数仅供参考，不硬塞模板结果（DDR-99、DDR-101）
+- Given 使用者變更精準度, When 儲存, Then 寫入 `user_settings.search_precision`；**不**寫入業務方向 profile（DDR-5、DDR-97）
+
+**US-1.4 帳號／我的（Account Hub）**
+> As a 使用者（Free / Pro / 企業版）, I want to 在同一個「我的」入口看到帳號資訊與方案相符的設定, so that 我知道自己能調什麼、升級能解鎖什麼。
+
+Acceptance Criteria:
+- Given 任一方案, When 進入「我的」, Then 顯示：帳號摘要、方案 badge、本期用量、**搜尋偏好**、資料與隱私說明（§11.8）
+- Given Pro, When 進入「我的」, Then 另顯示資料更新區（auto refresh、LinkedIn 自動補充 · 現行 Stage 1）
+- Given 企業版, When 進入「我的」, Then 另顯示組織摘要 + 連結「公開目錄管理」（`/admin/org`）；不與 Pro 個人設定混在同一表單區塊
+- Given Free, When 查看 Pro 鎖定區塊, Then 區塊可見但 disabled + 升級 CTA（非完全隱藏搜尋偏好）
 
 ### Module: 公司資訊補全（M6）
 
@@ -341,7 +367,7 @@ Step 7: 隱私說明（簡短，非阻塞）
 
 ---
 
-## 11. 商業模式與付費分層（v2.4 · 2026-06 鎖定）
+## 11. 商業模式與付費分層（v2.5 · 2026-06-16 鎖定）
 
 > **取代** v2.1–v2.3 的 §11.2.1–§11.2.3、§11.4–§11.5 及舊版獨立加購方案敘事。  
 > **對外只談三方案**：**Free｜Pro｜企業版**。§13 為 Phase 3 技術背景，方案分層以本章為準。
@@ -424,10 +450,17 @@ Step 7: 隱私說明（簡短，非阻塞）
 | search_cache 每日額度 | **30/日** ※ | **50/日** ※ | **100/日** ※ |
 | 個人化搜尋建議 chips | ❌ | ✅ | ✅ |
 | live 上網查（公司 Layer 3） | **5/月** ※ | **30/月** ※ | **100/月** ※ |
+| **搜尋精準度：精準 / 平衡** | ✅ | ✅ | ✅ |
+| **搜尋精準度：探索** | 🔒 可預覽 | ✅ | ✅ |
+| **自訂 match 分數門檻** | ❌ | ❌ | ✅ Admin 組織預設（P2） |
+| 結果 **match_sources** chips | ✅ | ✅ | ✅ |
+| 低分 **fallback 硬塞結果** | ❌ 全方案禁止（DDR-99） | ❌ | ❌ |
 
 **公開搜尋結果 UX（DDR-80 · C1）**：只顯示摘要 + 標籤「公開商務 · {公司}」+ **「前往外部名片」**；**不在 BSChat 顯示電話/Email**。
 
 **結果來源標示**：「你的名片庫」vs「公開商務 · {公司}」。
+
+**搜尋精準度（§11.9）**：使用者於「我的 → 搜尋偏好」設定；**非**業務方向 profile（DDR-97）。
 
 #### E. 公開商務目錄（M11 概念 · 企業版開發時實作）
 
@@ -449,7 +482,22 @@ Step 7: 隱私說明（簡短，非阻塞）
 | 用量與公開曝光報表 | ❌ | ❌ | ✅ |
 | audit log | ❌ | ❌ | ✅ P2 |
 
-#### G. 行銷用一句對照
+#### G. 帳號／我的（Account Hub · 入口能力）
+
+| 能力 | Free | Pro | 企業版 |
+|------|:----:|:---:|:------:|
+| 「我的」統一入口（`/settings` 或 App Tab） | ✅ | ✅ | ✅ |
+| 帳號摘要（email、顯示名、方案 badge） | ✅ | ✅ | ✅ |
+| 本期用量（搜尋、live 查、M6/M3.5 quota） | ✅ | ✅ | ✅ |
+| **搜尋偏好**（精準度 · §11.9） | ✅ 部分 | ✅ | ✅ |
+| 資料與隱私（私密說明、Privacy Strip 連結） | ✅ | ✅ | ✅ |
+| 資料更新（auto refresh、LinkedIn 自動補充） | 🔒 預覽 | ✅ | ✅ |
+| 組織摘要 + 公開目錄 Admin 入口 | ❌ | ❌ | ✅ |
+| 組織級搜尋預設精準度（Admin） | ❌ | ❌ | 🚧 P2 |
+
+> 詳細 IA 與區塊順序見 **§11.8**。企業 **Admin 操作**（stub CRUD）在 `/admin/org`，與個人「我的」分路由，同一方案下兩者並存。
+
+#### H. 行銷用一句對照
 
 | | Free | Pro | 企業版 |
 |---|------|-----|--------|
@@ -474,6 +522,7 @@ Step 7: 隱私說明（簡短，非阻塞）
 |------|------|------|:--:|
 | **Stage 0（已完成）** | Pro 自己庫價值 | M3.5 個人 LinkedIn 補充、M6 Layer2 過期自動 refresh、手動更新/搜尋額度、Pro 搜尋建議 chips | 否 |
 | **Stage 1（Now／可獨立做）** | Pro「資料持續準確」完成式 | **M5+M6 Layer3 即時上網查**、**Pro 設定 UI**、Pro E2E 驗證（API 整合測試 ✅） | 否 |
+| **Stage 1b（Next）** | 搜尋可信度 + Account Hub | **M5 1a/1b**（關 fallback、match_sources UI）、**§11.8 我的**、**§11.9 搜尋精準度分級** | 否 |
 | **Stage 2（⏳ 等企業帳號）** | Pro 靈魂「推薦合作的名片」 | **M11**（企業 Admin 發布 stub → 建立 **Pool B**）→ **M5b**（Pool A+B 跨池搜尋/推薦） | **是** |
 
 > **依賴鏈**：`企業版 M11 上線且有企業客戶發布 stub` → 有 Pool B → Pro「搜公開商務身份／推薦合作」（M5b）才成立。
@@ -486,12 +535,15 @@ M1  plan_tier: free | pro | enterprise
     · person_enrich_mode: inference_only | linkedin_llm
     · quotas: search_cache, live_augment, manual_refresh, person_linkedin
     · auto_refresh_*（Pro+）
+    · search_precision: strict | balanced | exploratory（§11.9；Free 禁 exploratory）
 
 M3  個人職責推估（Free+）
 
 M3.5  LinkedIn / 公開摘要（Pro+）
 
 M5  搜尋：自己庫 +（Pro+）公開 stub 索引；結果標來源；C1 外链 UX
+    · 统一漏斗 intent → hybrid top-K → rerank（DDR-101）
+    · search_precision → rerank prompt 严格度（§11.9）；禁止 retrieval fallback 凑数（DDR-99~100）
 
 M6  公司 enrich + manual / stale refresh
 
@@ -499,6 +551,8 @@ M11 公開商務目錄（企業版）：org、Admin、stub、外部 URL、公開
     · 匯入/HR 串接：企業版 kickoff（DDR-79）
 
 M7  預設私密；私人庫永不進公開索引
+
+UI  Account Hub「我的」（§11.8）：依 tier 組裝區塊；Admin 路由分離
 ```
 
 ### 11.7 決策紀錄（DDR · 2026-06）
@@ -512,6 +566,131 @@ M7  預設私密；私人庫永不進公開索引
 | DDR-78 | **離職/不公開 = Admin 手動下架**（seat 停用不自動移除） |
 | DDR-79 | 匯入/HR/SSO **企業版開發時再定**；最小契約：Admin + CSV |
 | DDR-80 | Pro 搜到公開身份：**摘要 + 前往外部名片**；不展示電話/Email |
+| DDR-96 | **「我的」= 三方案共用 Account Hub**；依 tier 顯示區塊（§11.8） |
+| DDR-97 | **搜尋精準度**可持久化；**≠** 業務方向 profile（DDR-5） |
+| DDR-98 | Free：**精準+平衡**；**探索**鎖 Pro+（可預覽）；自訂分數 / 組織預設 → 企業 P2 |
+| DDR-99 | 禁止低分 fallback 硬塞；`degraded` 不套用探索寬鬆門檻 |
+| DDR-100 | 結果卡 **match_sources chips** + degraded 明確 banner |
+
+### 11.8 帳號／我的（Account Hub）分層規劃
+
+> **決策**：三方案共用**同一入口**「我的」，以 `plan_tier` **解鎖區塊**，不做三套獨立帳號頁（DDR-96）。  
+> **路由（MVP）**：Web `GET /settings`（現行 SettingsPage 演進）；App 對應底部 Tab「我的」。  
+> **與 Admin 分離**：企業公開目錄 **CRUD** 在 `/admin/org`（M11）；「我的」只放**個人偏好 + 組織摘要連結**。
+
+#### 11.8.1 資訊架構（由上而下）
+
+```
+我的（Account Hub）
+├── 1. 帳號摘要          [Free · Pro · 企業版]
+│      顯示名稱、email、方案 badge、（企業版）所屬組織名
+├── 2. 本期用量          [Free · Pro · 企業版]
+│      搜尋、live 查、手動更新公司、LinkedIn 補充…
+├── 3. 搜尋偏好          [Free · Pro · 企業版]  ← §11.9
+│      精準度三檔；Free 探索模式鎖定 + CTA
+├── 4. 資料更新          [Pro · 企業版]（Free：區塊可見、disabled + CTA）
+│      auto refresh、LinkedIn 自動補充（Stage 1 現行）
+├── 5. 組織與公開目錄    [僅 企業版]
+│      組織名、已發布 stub 數、→「管理公開目錄」(/admin/org)
+├── 6. 方案與帳單        [Free · Pro · 企業版]
+│      升級 / 試用 Pro、（企業版 P2）seat 與帳單入口
+└── 7. 資料與隱私        [Free · Pro · 企業版]
+       預設私密說明、刪除帳號、Privacy Strip 詳述連結
+```
+
+#### 11.8.2 三方案畫面差異（摘要）
+
+| 區塊 | Free | Pro | 企業版 |
+|------|------|-----|--------|
+| 1–3、7 | 完整（3 內探索鎖定） | 完整 | 完整 |
+| 4 資料更新 | 灰顯 +「升級 Pro」 | 可操作 | 可操作（同 Pro seat） |
+| 5 組織 | 隱藏 | 隱藏 | 摘要 + 連 Admin |
+| 6 方案 | 升級 CTA | 可改回 Free（dev/Pilot） | 企業合約說明 |
+
+#### 11.8.3 與其他模組邊界
+
+| 模組 | 「我的」內容 | 不在「我的」 |
+|------|-------------|-------------|
+| **M1** | plan、quota、`search_precision`、auto_refresh 開關 | 計費後台 |
+| **M5** | 搜尋精準度偏好（讀寫） | 搜尋執行本身 |
+| **M6 / M3.5** | Pro 資料更新開關 | 聯絡人詳情內「更新公司／LinkedIn」 |
+| **M11** | 組織摘要、Admin 連結 | stub 列表、CSV、發布下架 |
+
+#### 11.8.4 API / 設定欄位（預留）
+
+`PATCH /api/v1/me/settings` 擴充（與 Stage 1 並存）：
+
+```json
+{
+  "search_precision": "strict | balanced | exploratory"
+}
+```
+
+- 預設：`balanced`
+- Free 送 `exploratory` → `403 SEARCH_PRECISION_NOT_ALLOWED` 或 silently 降為 `balanced`（ENG 擇一，QA 鎖定）
+
+---
+
+### 11.9 AI 搜尋精準度（分級開放）
+
+> **產品問題**：全鎖設定 → Free 搜不到以為產品壞；全開 → 削弱 Pro 付費誘因。  
+> **解法**：**分級開放（teaser + 升級錨點）**（DDR-98）。
+
+#### 11.9.1 三檔精準度（使用者可理解文案）
+
+> **2026-06-17 決策（DDR-101）**：精準度改由 **rerank prompt 语义** 控制 AI 严格程度，**不再**映射服务端 `min_match_score` 过滤。Pilot 数值 0.75 / 0.55 / 0.40 仅作 **LLM 自评 `match_score` 的预期分布参考**（排序与 QA），不作 EMPTY 门槛。
+
+| 模式 | AI 行为（prompt） | 预期体感 | 適用 |
+|------|-------------------|----------|------|
+| **精準** | 高度确定才推荐；不确定则返回更少或 `[]` | 寧可 EMPTY | 老闆要名單、要確定對口 |
+| **平衡**（預設） | 语意相关即可；附 match_reason | 多数日常找商机 | 預設 |
+| **探索** | 可列弱相关；仍须 cite 真实字段 | 更多候选、供发散 | 開拓新對象、公開池（Pro+） |
+
+> UI 文案面向使用者，**不**暴露分数门槛。仍**禁止** retrieval 模板 fallback 凑数（DDR-99）。
+
+#### 11.9.1b 两种分数分工（M5 · DDR-101）
+
+| 分数 | 产生阶段 | 用途 | **禁止**用途 |
+|------|----------|------|--------------|
+| **`retrieval_score`** | Layer A 混合召回（tsvector / pg_trgm / pgvector RRF） | 召回池内排序；多路召回合并去重；工程日志 | 决定 API 是否 EMPTY；替代 LLM 判断相关性 |
+| **`match_score`** | Layer B LLM rerank | 最终结果排序；可选 UI 展示；`search_results` 持久化；QA 回归；跨池混排 | 服务端 `if score < 0.55: drop`；与 `search_precision` 硬映射过滤 |
+
+**EMPTY 合法原因**：① 召回+rerank 后 LLM 返回 0 条（含精準 prompt 下 AI 主动不报）；② hard constraint 过滤后 0 条；③ 用户无权搜该池（entitlement）；④ `degraded` 且 fallback 路径无合格候选。**不合法**：因 `match_score` 低于 Pilot 参考值而 silent 丢弃 LLM 已返回的条目。
+
+#### 11.9.2 方案分級開放矩陣
+
+| 能力 | Free | Pro | 企業版 |
+|------|:----:|:---:|:------:|
+| 精準 | ✅ 可選 | ✅ | ✅ |
+| 平衡（預設） | ✅ 可選 | ✅ | ✅ |
+| 探索 | 🔒 UI 可見、不可存；文案連結 Pro 價值（跨池 + 放寬匹配） | ✅ | ✅ |
+| 自訂滑桿 / 數字門檻 | ❌ | ❌ | 🚧 **Admin 設組織預設**（P2；覆寫 seat 個人預設） |
+
+**Free「探索」鎖定 UX 文案方向**（Pilot 可測）：
+> 「Pro：放寬匹配，並搜尋平台公開商務身份」
+
+#### 11.9.3 結果可信度（與 1a / 1b 對齊）
+
+| 規則 | 說明 |
+|------|------|
+| **禁止 fallback 湊數** | Rerank 無合格結果 → `EMPTY`；不得輸出「文字相關：…」模板分數 0.35 列（DDR-99） |
+| **degraded 路徑** | LLM 失敗時標 `degraded=true`；fallback 排序之 `match_score` 仅供参考；UI banner「簡化模式」（DDR-100） |
+| **match_sources** | 每張結果卡展示引用欄位 chip（DDR-100） |
+| **EMPTY 引導** | 精準模式下 0 結果 → 建議改「平衡／探索（Pro）」或換問法 |
+
+#### 11.9.4 與 DDR-5 的關係
+
+- **允許持久化**：`search_precision`（搜尋 strictness／結果門檻）
+- **禁止持久化**：業務方向、產業偏好、固定「我只做 OEM」類 profile
+- 每次搜尋仍以**當次自然語言**為意圖來源；精準度只調 **rerank 严格度**，不改寫 query
+
+#### 11.9.5 實施階段
+
+| 階段 | 內容 | 依賴 |
+|------|------|------|
+| **Stage 1b** | 1a 關 fallback + 1b UI chips/banner + Account Hub 搜尋偏好 + entitlement 分級 | M1 settings API、M5 |
+| **Stage 2+** | embedding 混合召回纳入 Layer A（§11.9 三档语意不变；分数分工见 §11.9.1b） | M5 P1 pgvector |
+| **Enterprise P2** | Admin 組織預設精準度 | M11 治理 |
 
 ---
 
@@ -746,4 +925,4 @@ Acceptance Criteria:
 
 ---
 
-*文件版本：v2.3 | 更新：2026-05-20 | 新增：§11.2.1~11.2.3 方案总对照、M3.5 付費切割、Enterprise Personal / Publisher 分节*
+*文件版本：v2.5 | 更新：2026-06-16 | 新增：§11.8 帳號／我的分層、§11.9 搜尋精準度分級、DDR-96~100、US-1.4 / US-5.3*

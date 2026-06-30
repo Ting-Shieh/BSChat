@@ -1,6 +1,6 @@
 # Project Context — BSChat
 
-最後更新：2026-06-16
+最後更新：2026-06-17
 PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有效）→ 執行模式
 
 > 本檔由 `project-onboard` 於 2026-06-11 接手既有專案時重建。
@@ -35,7 +35,7 @@ PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有
 - 2026-05-20：個人職責理解分層 = Free 僅 M3 LLM 推估；Pro/Enterprise 才有 M3.5 LinkedIn+LLM（DDR-74）
 - 2026-06-03：M3.5 紅線 — **Pro 不得把 mock / 推論假資料標示為「LinkedIn 公開資料」**；來源以 `data_source` 動態標籤呈現
 - 2026-06-11：M3.5 資料來源與呈現 4+1 項拍板（pm-role · DDR-81~85）= 分區呈現 / 混合 fallback / 有 URL 讀不到不扣額度 / card_inference 免費 / data_source 採 6 類。皆對齊既有實作，紅旗 3 解除
-- 2026-06-15：Pro 定位 = Free（讓交換名片變有價值）＋「推薦合作的名片」（平台公開商務身份）。後者依賴企業帳號先發布 Pool B（DDR-76/77）→ 列 Stage 2、blocked-by 企業帳號。近期 Pro 可交付＝Stage 1（Layer3 live 查 + Pro 設定 UI）
+- 2026-06-17：M5 检索契约（DDR-101）= 统一漏斗 + 两种分数分工；精準度改 rerank prompt，废止服务端 min_match_score 过滤
 
 ## Spec 佈局表（AGENTS.md 路徑表的來源）
 
@@ -53,7 +53,11 @@ PRD 確認日期：2026-05-20（v2.3，現行真相來源；原 PRD L1/L2 仍有
 
 ## 變更紀錄
 
-- 2026-06-16：**M5 搜尋 UX 對焦 PRD** — Pro 預設 `search_scope=all` 一次搜尋；移除搜尋前 scope tab；結果卡標「你的名片庫」/「公開商務」；結果頁 client-side 篩選 chip（全部/僅我的/僅公開）
+- 2026-06-30：**M5 dev search debug 面板** — `SearchQueryResponse.debug`（DEBUG 门控）；前端 `SearchDebugPanel`（development only）；设定页「AI 严格度」文案
+- 2026-06-30：**M5 pgvector 混合召回** — migration 014、Gemini text-embedding-004（768d）、ts+trgm+vector RRF；Docker Postgres 改 `pgvector/pgvector:pg16`；`scripts/backfill_search_embeddings.py`
+- 2026-06-17：**M5 检索契约 DDR-101** — 统一漏斗 spec；两种分数分工写入 PRD §11.9.1b、SA/SD M5 §2.6、ENG M5 §1.1、QA M5 §2.12
+- 2026-06-16：**M5 PM/UIUX v1.2/v1.1** — 对齐 PRD v2.5 §11.8~9（Account Hub、搜尋精準度、Stage 1b、跨池 UX）
+- 2026-06-16：**M5 搜尋 UX** — Pro 預設 `search_scope=all`；結果 badge + 結果頁篩選 chip
 - 2026-06-16：**M5b 跨池搜尋** — Pro/Enterprise 可搜公開商務池（`search_scope` network/all）、公開結果卡（無電話/Email + 外部連結）。migration 012。73 tests
 - 2026-06-16：**M11 MVP 實作** — migration 011、Admin API、Pool B index worker、dev seed（acme-demo）、Admin UI `/admin/org`、4 條 API 測試。下一棒 M5b
 - 2026-06-16：**PRD §13 對焦 §11** — 移除舊第四檔加購敘事；跨池搜尋 = Pro 內建、企業版 = 發布公開目錄

@@ -5,6 +5,30 @@ import { useCopyContact, CopyToast } from "@/features/actions";
 import { ContactPreviewCard } from "@/shared/components/ContactPreviewCard";
 import type { SearchResultItem } from "@/shared/types/search";
 
+const MATCH_FIELD_LABELS: Record<string, string> = {
+  company_name: "公司",
+  title: "職稱",
+  company_products: "產品",
+  responsibility_scope: "職責",
+  source_label: "來源",
+};
+
+function MatchSourceChips({ sources }: { sources: SearchResultItem["match_sources"] }) {
+  if (!sources.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {sources.map((src, i) => (
+        <span
+          key={`${src.field}-${i}`}
+          className="inline-block rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-secondary)]"
+        >
+          {MATCH_FIELD_LABELS[src.field] ?? src.field}：{src.value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function SearchResultCard({
   item,
   queryId,
@@ -39,6 +63,7 @@ export function SearchResultCard({
         <p className="mt-3 rounded-lg bg-[var(--color-ai-bg)] px-3 py-2 text-sm text-[var(--color-ai-text)]">
           {item.match_reason}
         </p>
+        <MatchSourceChips sources={item.match_sources} />
         {item.external_card_url && (
           <a
             href={item.external_card_url}
@@ -90,6 +115,7 @@ export function SearchResultCard({
           </span>
         )}
       </p>
+      <MatchSourceChips sources={item.match_sources} />
 
       {(phone || email) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">

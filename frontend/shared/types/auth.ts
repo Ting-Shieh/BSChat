@@ -20,6 +20,11 @@ export interface AutoRefreshInfo {
   interval_days: number;
 }
 
+export interface SearchPrecisionInfo {
+  mode: "strict" | "balanced" | "exploratory";
+  can_use_exploratory: boolean;
+}
+
 export interface OrgMembershipInfo {
   org_id: string;
   org_name: string;
@@ -35,6 +40,7 @@ export interface MeResponse {
   quotas: QuotaInfo;
   person_enrich: PersonEnrichInfo;
   auto_refresh: AutoRefreshInfo;
+  search_precision: SearchPrecisionInfo;
   org_memberships?: OrgMembershipInfo[];
 }
 

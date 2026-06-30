@@ -19,6 +19,8 @@
 | **不搜他人人脉** | 仅 Pool A；user_id 隔离（DDR-59） |
 | **pending 可搜** | unconfirmed 联系人可出现（DDR-22） |
 | **降级可用** | LLM 失败仍 tsvector 结果 + degraded |
+| **分数契约** | `retrieval_score` 仅召回排序；`match_score` 仅 rerank 后排序/展示；均不得作 EMPTY 硬门槛（DDR-101） |
+| **统一漏斗** | 全库规模同一 pipeline；禁止 contact_count 分支（DDR-101） |
 | **隐私可见** | Privacy Strip；不暴露跨用户数据 |
 | **M3/M6 整合** | index 含 products；详情 Context Banner |
 | **配额** | cache daily / live monthly（P1） |
@@ -366,6 +368,34 @@
 | **Type** | Integration |
 | **Steps** | search 命中 → delete contact → 再 search |
 | **Expected** | 该 contact_id 不在 results |
+
+---
+
+### 2.12 分数契约与统一漏斗（DDR-101）
+
+#### TC-M5-039a | 语义相关但 match_score 0.48 仍返回（平衡模式）
+| **Priority** | P0 |
+| **Type** | Integration |
+| **Preconditions** | 索引含 IoT；query「谁认识做 IoT 的？」；LLM rerank 返回 match_score=0.48 |
+| **Expected** | results 含该 contact；**不**因 score < 0.55 被服务端丢弃 |
+
+#### TC-M5-039b | retrieval_score 不参与 EMPTY 判定
+| **Priority** | P0 |
+| **Type** | Integration |
+| **Preconditions** | 字面 recall 弱（max retrieval_score < 0.15）；LLM rerank 返回 ≥1 条 |
+| **Expected** | status=COMPLETED；不强制 EMPTY |
+
+#### TC-M5-039c | 精準模式 LLM 返回 [] → EMPTY
+| **Priority** | P0 |
+| **Type** | Integration |
+| **Preconditions** | search_precision=strict；rerank mock 返回 `results: []` |
+| **Expected** | status=EMPTY；非 Python 分数 filter 导致 |
+
+#### TC-M5-039d | 名片库 40→200 张 pipeline 不变
+| **Priority** | P1 |
+| **Type** | Integration |
+| **Preconditions** | 同一 query、同一索引 subset 仍落在 top-K 内 |
+| **Expected** | 仍走 intent → hybrid top-K → rerank；无 contact_count 分支 |
 
 ---
 

@@ -8,11 +8,14 @@ import type { SearchQueryResponse, SearchResultItem } from "@/shared/types/searc
 import { cn } from "@/shared/lib/cn";
 import { useLiveAugment, useSearch, useSearchStatus } from "../hooks";
 import { AhaMomentModal } from "./AhaMomentModal";
+import { DegradedSearchBanner } from "./DegradedSearchBanner";
+import { SearchDebugPanel } from "./SearchDebugPanel";
 import { SearchEmptyState } from "./SearchEmptyState";
 import { SearchInput } from "./SearchInput";
 import { SearchResultCard } from "./SearchResultCard";
 
 const AHA_KEY = "bschat-aha-shown";
+const SHOW_SEARCH_DEBUG = process.env.NODE_ENV === "development";
 
 type ResultFilter = "all" | "private" | "network";
 
@@ -164,6 +167,14 @@ export function SearchPage() {
 
       {liveAugment.isError && (
         <p className="text-xs text-[var(--color-accent-hover)]">即時查詢失敗，請稍後再試。</p>
+      )}
+
+      {searchResult?.debug && SHOW_SEARCH_DEBUG && (
+        <SearchDebugPanel debug={searchResult.debug} />
+      )}
+
+      {searchResult?.status === "COMPLETED" && searchResult.degraded && allResults.length > 0 && (
+        <DegradedSearchBanner />
       )}
 
       {searchResult?.status === "COMPLETED" && allResults.length > 0 && (

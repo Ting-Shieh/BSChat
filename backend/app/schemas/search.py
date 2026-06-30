@@ -58,6 +58,40 @@ class SearchEmptyStateDTO(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
     sample_queries: list[str] = Field(default_factory=list)
     cta: dict | None = None
+    search_precision: str | None = None
+    precision_hint: str | None = None
+
+
+class RetrievalCandidateDebugDTO(BaseModel):
+    id: str
+    label: str
+    retrieval_score: float
+
+
+class PoolRetrievalDebugDTO(BaseModel):
+    pool: str
+    lexical_query: str
+    semantic_query: str
+    ts_hits: int
+    trgm_extra_hits: int
+    vector_hits: int
+    widened: bool
+    top_candidates: list[RetrievalCandidateDebugDTO] = Field(default_factory=list)
+
+
+class SearchDebugDTO(BaseModel):
+    search_scope: str
+    search_precision: str
+    intent_prompt_version: str
+    rerank_prompt_version: str
+    semantic_query: str
+    parsed_intent: dict
+    private: PoolRetrievalDebugDTO | None = None
+    public: PoolRetrievalDebugDTO | None = None
+    rerank_input_count: int
+    result_count: int
+    degraded: bool
+    latency_ms: int | None = None
 
 
 class SearchQuotasDTO(BaseModel):
@@ -84,3 +118,4 @@ class SearchQueryResponse(BaseModel):
     suggest_live: bool = False
     results: list[SearchResultItemDTO] = Field(default_factory=list)
     empty_state: SearchEmptyStateDTO | None = None
+    debug: SearchDebugDTO | None = None

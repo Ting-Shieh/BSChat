@@ -7,6 +7,12 @@ import { cn } from "@/shared/lib/cn";
 
 const INTERVALS = [30, 60, 90] as const;
 
+const PRECISION_OPTIONS = [
+  { id: "strict" as const, label: "精準", desc: "只顯示高度符合的結果" },
+  { id: "balanced" as const, label: "平衡", desc: "預設；語意相關即可" },
+  { id: "exploratory" as const, label: "探索", desc: "較寬鬆，適合發想人脈（Pro）" },
+];
+
 export function SettingsPage() {
   const { data: me, isLoading } = useMe();
   const switchPlan = useSwitchPlan();
@@ -74,6 +80,59 @@ export function SettingsPage() {
           <QuotaItem label="更新公司（本月剩）" value={me.quotas.manual_refresh_remaining_month} />
           <QuotaItem label="LinkedIn 補充（本月剩）" value={me.quotas.person_linkedin_remaining_month} />
         </dl>
+      </section>
+
+      {/* AI 嚴格度 */}
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <h2 className="text-sm font-medium text-[var(--color-text-primary)]">AI 嚴格度</h2>
+        <p className="mt-0.5 text-xs text-[var(--color-text-tertiary)]">
+          控制 AI 排序時要多嚴格；不影響每次搜尋的對話意圖解析
+        </p>
+        <div className="mt-3 space-y-2">
+          {PRECISION_OPTIONS.map((opt) => {
+            const locked = opt.id === "exploratory" && !me.search_precision.can_use_exploratory;
+            const selected = me.search_precision.mode === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={busy || locked}
+                onClick={() => !locked && apply({ search_precision: opt.id })}
+                className={cn(
+                  "w-full rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50",
+                  selected
+                    ? "border-[var(--color-primary)] bg-[var(--color-ai-bg)]"
+                    : "border-[var(--color-border)] hover:border-[var(--color-primary)]/40",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                    {opt.label}
+                    {locked && (
+                      <span className="ml-1.5 rounded bg-[var(--color-border)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--color-text-tertiary)]">
+                        Pro
+                      </span>
+                    )}
+                  </span>
+                  {selected && (
+                    <span className="text-[10px] text-[var(--color-primary)]">使用中</span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-[var(--color-text-tertiary)]">{opt.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+        {!me.search_precision.can_use_exploratory && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => switchPlan.mutate("pro")}
+            className="mt-3 text-xs font-medium text-[var(--color-primary)] hover:underline disabled:opacity-50"
+          >
+            升級 Pro 解鎖探索模式 →
+          </button>
+        )}
       </section>
 
       {/* Pro 設定 */}
@@ -203,6 +262,7 @@ function planLabel(tier: string): string {
 function formatError(err: unknown): string {
   const msg = err instanceof Error ? err.message : "";
   if (msg.includes("PRO_REQUIRED")) return "此設定需要 Pro 方案";
+  if (msg.includes("SEARCH_PRECISION_NOT_ALLOWED")) return "探索模式需要 Pro 方案";
   if (msg.includes("INVALID_REFRESH_INTERVAL")) return "不支援的更新頻率";
   return "無法儲存設定，請稍後再試";
 }

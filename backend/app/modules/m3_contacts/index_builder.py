@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.embeddings import embed_text, vector_literal
 from app.models.company import CompanyEnrichment
 from app.models.contact import Contact
 from app.models.contact_search_document import ContactSearchDocument, content_hash_for
@@ -69,7 +70,7 @@ async def index_contact(db: AsyncSession, contact_id: uuid.UUID) -> None:
         select(ContactSearchDocument).where(ContactSearchDocument.contact_id == contact_id)
     )
     doc = doc_result.scalar_one_or_none()
-    if doc and doc.content_hash == content_hash:
+    if doc and doc.content_hash == content_hash and doc.embedding is not None:
         contact.search_status = "indexed"
         contact.search_text = search_text
         await db.commit()
@@ -89,17 +90,35 @@ async def index_contact(db: AsyncSession, contact_id: uuid.UUID) -> None:
         doc.content_hash = content_hash
 
     await db.flush()
-    await db.execute(
-        text(
-            """
-            UPDATE contact_search_documents
-            SET search_vector = to_tsvector('simple', search_text),
-                indexed_at = NOW()
-            WHERE contact_id = :contact_id
-            """
-        ),
-        {"contact_id": contact.id},
-    )
+    embedding_vec = await embed_text(search_text)
+    try:
+        if embedding_vec:
+            await db.execute(
+                text(
+                    """
+                    UPDATE contact_search_documents
+                    SET search_vector = to_tsvector('simple', search_text),
+                        embedding = CAST(:embedding AS vector),
+                        indexed_at = NOW()
+                    WHERE contact_id = :contact_id
+                    """
+                ),
+                {"contact_id": contact.id, "embedding": vector_literal(embedding_vec)},
+            )
+        else:
+            raise RuntimeError("skip embedding")
+    except Exception:
+        await db.execute(
+            text(
+                """
+                UPDATE contact_search_documents
+                SET search_vector = to_tsvector('simple', search_text),
+                    indexed_at = NOW()
+                WHERE contact_id = :contact_id
+                """
+            ),
+            {"contact_id": contact.id},
+        )
     contact.search_text = search_text
     contact.search_status = "indexed"
     await db.commit()

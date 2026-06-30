@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.embeddings import embed_text, vector_literal
 from app.models.public_business_stub import PublicBusinessStub
 from app.models.public_directory_document import PublicDirectoryDocument, content_hash_for
 
@@ -35,7 +36,7 @@ async def index_stub(db: AsyncSession, stub_id: uuid.UUID) -> None:
         select(PublicDirectoryDocument).where(PublicDirectoryDocument.stub_id == stub_id)
     )
     doc = doc_result.scalar_one_or_none()
-    if doc and doc.content_hash == content_hash:
+    if doc and doc.content_hash == content_hash and doc.embedding is not None:
         await db.commit()
         return
 
@@ -52,17 +53,35 @@ async def index_stub(db: AsyncSession, stub_id: uuid.UUID) -> None:
         doc.content_hash = content_hash
 
     await db.flush()
-    await db.execute(
-        text(
-            """
-            UPDATE public_directory_documents
-            SET search_vector = to_tsvector('simple', search_text),
-                indexed_at = NOW()
-            WHERE stub_id = :stub_id
-            """
-        ),
-        {"stub_id": stub.id},
-    )
+    embedding_vec = await embed_text(search_text)
+    try:
+        if embedding_vec:
+            await db.execute(
+                text(
+                    """
+                    UPDATE public_directory_documents
+                    SET search_vector = to_tsvector('simple', search_text),
+                        embedding = CAST(:embedding AS vector),
+                        indexed_at = NOW()
+                    WHERE stub_id = :stub_id
+                    """
+                ),
+                {"stub_id": stub.id, "embedding": vector_literal(embedding_vec)},
+            )
+        else:
+            raise RuntimeError("skip embedding")
+    except Exception:
+        await db.execute(
+            text(
+                """
+                UPDATE public_directory_documents
+                SET search_vector = to_tsvector('simple', search_text),
+                    indexed_at = NOW()
+                WHERE stub_id = :stub_id
+                """
+            ),
+            {"stub_id": stub.id},
+        )
     await db.commit()
 
 

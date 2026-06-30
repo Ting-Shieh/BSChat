@@ -8,7 +8,7 @@ from app.ai.schemas.search_rerank import ParsedIntent
 from app.core.config import get_settings
 
 settings = get_settings()
-INTENT_PROMPT_VERSION = "v2"
+INTENT_PROMPT_VERSION = "v3"
 
 INTENT_PROMPT = """You parse a B2B contact search query into structured retrieval intent for a private business-card rolodex.
 
@@ -21,6 +21,7 @@ Return JSON only:
   "events": ["event or occasion labels if mentioned"],
   "regions": ["regions if mentioned"],
   "keywords": ["2-8 retrieval terms — short phrases likely to appear on cards or company data"],
+  "semantic_query": "one sentence describing who/what the user is looking for, for semantic search",
   "hard_roles": [],
   "hard_companies": [],
   "hard_products": []
@@ -34,6 +35,7 @@ Guidelines:
 - When not an explicit hard constraint, use keywords / roles / products instead
 - Do not invent a stored user profile; extract only from this query
 - Use empty arrays when a field does not apply
+- semantic_query should capture implied meaning (synonyms, industry language) in one concise sentence
 """
 
 

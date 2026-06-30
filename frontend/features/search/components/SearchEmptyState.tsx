@@ -19,6 +19,14 @@ export function SearchEmptyState({ state }: { state: SearchEmptyState }) {
           <li key={suggestion}>{suggestion}</li>
         ))}
       </ul>
+      {state.precision_hint && (
+        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">
+          {state.precision_hint}{" "}
+          <Link href="/settings" className="font-medium text-[var(--color-primary)] hover:underline">
+            前往設定
+          </Link>
+        </p>
+      )}
       {state.cta?.action === "capture" && (
         <Link
           href="/capture"

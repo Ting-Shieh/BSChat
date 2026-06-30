@@ -5,15 +5,18 @@ import uuid
 from app.ai.gemini_client import gemini_generate_text
 from app.ai.schemas.search_rerank import MatchSource, ParsedIntent, RerankItem, SearchRerankResponse
 from app.core.config import get_settings
-from app.modules.m5_search.constraints import MIN_MATCH_SCORE, filter_rerank_results, has_hard_constraints
+from app.modules.m5_search.constraints import filter_rerank_results, has_hard_constraints
+from app.modules.m5_search.precision import DEFAULT_PRECISION, precision_rerank_guidance
 from app.modules.m5_search.retrieval import CandidateDoc
 
 settings = get_settings()
-PROMPT_VERSION = "v3"
+PROMPT_VERSION = "v4"
 
-RERANK_PROMPT = """You are a B2B contact search assistant. Rank contacts from the user's private rolodex.
+RERANK_PROMPT = """You are a B2B contact search assistant. Rank contacts from the user's rolodex (private and/or public business directory entries).
 
 User query: {query}
+
+{search_precision_guidance}
 
 Hard constraints (every returned contact MUST satisfy ALL — otherwise exclude):
 {hard_constraints}
@@ -38,6 +41,7 @@ Return JSON only:
 Guidelines:
 - Use only contact_id values from the candidates list
 - Interpret semantic intent (synonyms, industry language, implied roles) — do not require literal keyword overlap
+- match_score reflects your confidence in relevance (for ranking/display only)
 - If hard constraints are listed, exclude anyone who fails them; return fewer or zero results rather than partial matches
 - match_sources must cite real candidate fields
 - Use Traditional Chinese for match_reason
@@ -64,8 +68,15 @@ def _intent_terms(intent: ParsedIntent) -> list[str]:
     return terms
 
 
-def _mock_rerank(query: str, candidates: list[dict], intent: ParsedIntent) -> SearchRerankResponse:
+def _mock_rerank(
+    query: str,
+    candidates: list[dict],
+    intent: ParsedIntent,
+    *,
+    search_precision: str = DEFAULT_PRECISION,
+) -> SearchRerankResponse:
     """Offline fallback only — uses intent terms, no domain dictionaries."""
+    _ = search_precision
     terms = _intent_terms(intent) or [query.strip().lower()[:32]]
     scored: list[RerankItem] = []
     candidate_map = {c["contact_id"]: c for c in candidates}
@@ -104,23 +115,21 @@ def _mock_rerank(query: str, candidates: list[dict], intent: ParsedIntent) -> Se
         if has_hard_constraints(intent):
             if not satisfies_hard_constraints(cand, intent):
                 continue
-            score = max(score, MIN_MATCH_SCORE + 0.05)
-        elif hits == 0:
+        elif hits == 0 and float(c.get("retrieval_score") or 0) < 0.05:
             continue
 
         sources: list[MatchSource] = []
         if c.get("title"):
             sources.append(MatchSource(field="title", value=c["title"]))
 
-        if score >= MIN_MATCH_SCORE:
-            scored.append(
-                RerankItem(
-                    contact_id=cid,
-                    match_score=min(score, 0.95),
-                    match_reason=f"與「{query}」相關：{c.get('display_name')} · {c.get('company_name') or ''}",
-                    match_sources=sources,
-                )
+        scored.append(
+            RerankItem(
+                contact_id=cid,
+                match_score=min(score, 0.95),
+                match_reason=f"與「{query}」相關：{c.get('display_name')} · {c.get('company_name') or ''}",
+                match_sources=sources,
             )
+        )
 
     scored.sort(key=lambda x: x.match_score, reverse=True)
     if has_hard_constraints(intent):
@@ -153,15 +162,18 @@ async def rerank_contacts(
     query: str,
     candidates: list[dict],
     intent: ParsedIntent,
+    *,
+    search_precision: str = DEFAULT_PRECISION,
 ) -> tuple[SearchRerankResponse, bool]:
     if not candidates:
         return SearchRerankResponse(), False
 
     if not settings.search_will_use_llm:
-        return _mock_rerank(query, candidates, intent), False
+        return _mock_rerank(query, candidates, intent, search_precision=search_precision), False
 
     prompt = RERANK_PROMPT.format(
         query=query,
+        search_precision_guidance=precision_rerank_guidance(search_precision),
         hard_constraints=_hard_constraints_summary(intent),
         candidates=json.dumps(candidates, ensure_ascii=False)[:12000],
     )
@@ -182,6 +194,6 @@ async def rerank_contacts(
             )
             return _parse_json(msg.content[0].text), False
     except Exception:
-        return _mock_rerank(query, candidates, intent), True
+        return _mock_rerank(query, candidates, intent, search_precision=search_precision), True
 
-    return _mock_rerank(query, candidates, intent), False
+    return _mock_rerank(query, candidates, intent, search_precision=search_precision), False

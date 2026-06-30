@@ -5,8 +5,6 @@ import re
 from app.ai.schemas.search_rerank import ParsedIntent, RerankItem
 from app.modules.m5_search.retrieval import CandidateDoc
 
-MIN_MATCH_SCORE = 0.55
-
 NEGATIVE_REASON_PATTERNS = re.compile(
     r"並非|并非|不是|不符合|不符|並不|并不|除外|排除|不符合條件"
 )
@@ -83,12 +81,11 @@ def filter_rerank_results(
     candidate_map: dict[str, CandidateDoc],
     intent: ParsedIntent,
 ) -> list[RerankItem]:
+    """Boundary filter only — no match_score threshold (DDR-101)."""
     kept: list[RerankItem] = []
     for item in items:
         cand = candidate_map.get(item.contact_id)
         if not cand:
-            continue
-        if item.match_score < MIN_MATCH_SCORE:
             continue
         if not satisfies_hard_constraints(cand, intent):
             continue
