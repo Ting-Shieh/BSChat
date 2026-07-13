@@ -47,6 +47,9 @@ class SearchResultItemDTO(BaseModel):
     publisher_org_name: str | None = None
     external_card_url: str | None = None
     live_products: list[str] | None = None
+    opening_line: str | None = None
+    collaboration_note: str | None = None
+    dormant_months: int | None = None
 
 
 class LiveAugmentRequest(BaseModel):
@@ -108,6 +111,15 @@ class SearchStatusResponse(BaseModel):
     public_pool_count: int = 0
 
 
+class BriefingDTO(BaseModel):
+    """Opportunity-briefing headline synthesised over the private rolodex."""
+
+    headline: str
+    scanned_count: int
+    match_count: int
+    dormant_count: int
+
+
 class SearchQueryResponse(BaseModel):
     query_id: UUID
     status: str
@@ -117,5 +129,6 @@ class SearchQueryResponse(BaseModel):
     aha_moment: bool = False
     suggest_live: bool = False
     results: list[SearchResultItemDTO] = Field(default_factory=list)
+    briefing: BriefingDTO | None = None
     empty_state: SearchEmptyStateDTO | None = None
     debug: SearchDebugDTO | None = None

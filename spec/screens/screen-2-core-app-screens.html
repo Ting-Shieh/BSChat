@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 核心 App 其餘畫面</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --primary:#0F4C5C; --primary-hover:#0B3A47; --primary-muted:#E6F2F5;
+    --accent:#D97706; --accent-hover:#B45309; --accent-muted:#FEF3C7;
+    --bg:#FAFAF9; --surface:#fff; --border:#E7E5E4;
+    --tp:#1C1917; --ts:#57534E; --tt:#A8A29E;
+    --success:#059669; --warning:#D97706; --error:#DC2626; --info:#0284C7;
+    --ai-bg:#EFF6FF; --ai-bd:#BFDBFE; --ai-tx:#1E40AF; --ai-badge:#DBEAFE;
+    --priv-bg:#F0FDF4; --priv-tx:#166534;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#57534E;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--tp);-webkit-font-smoothing:antialiased;padding:28px 14px 60px}
+  .en{font-family:'Outfit',system-ui,sans-serif}.mono{font-family:'JetBrains Mono',monospace}
+  .head{text-align:center;color:#fff;margin-bottom:24px}
+  .head .t{font-size:16px;font-weight:600;letter-spacing:.3px}
+  .head .s{font-size:12px;color:#D6D3D1;margin-top:3px}
+  .stage{max-width:1720px;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;justify-content:center;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .lbl{color:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+  .lbl .n{width:22px;height:22px;border-radius:6px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .cap{color:#E7E5E4;font-size:12px;max-width:390px;text-align:center;line-height:1.55}.cap b{color:#fff}
+  .phone{width:390px;height:720px;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.3);position:relative;display:flex;flex-direction:column}
+  .sb{height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:12px;font-weight:600;flex-shrink:0}
+  .body{flex:1;overflow-y:auto}
+  .body::-webkit-scrollbar{width:0}
+  .chip{font-size:10.5px;line-height:1;padding:5px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .ai-strip{border-left:3px solid var(--ai-bd)}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;flex:1}
+  .tabbar{height:56px;background:#fff;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+  .avatar{border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);background:var(--primary-muted)}
+  .btn{height:40px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:none}
+  .btn-p{background:var(--primary);color:#fff}
+  .btn-o{background:#fff;color:var(--primary);border:1.5px solid var(--primary)}
+  .seg{display:flex;background:#F5F5F4;border-radius:10px;padding:3px}
+  .seg div{flex:1;text-align:center;font-size:12.5px;padding:8px 0;border-radius:8px;color:var(--ts)}
+  .seg .on{background:#fff;color:var(--primary);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .bar{height:6px;border-radius:999px;background:#F5F5F4;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--primary)}
+  .sect{font-size:11px;color:var(--tt);font-weight:600;letter-spacing:.4px;margin:16px 16px 8px}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="t">BSChat · 核心 App 其餘畫面（業務 persona · 單機 · Pool A）</div>
+  <div class="s">名片庫 · 聯絡人詳情（AI 透明三區）· 待確認 · 我的 —— 與流程原型同一設計語言</div>
+</div>
+
+<div class="stage">
+
+  <!-- A 名片庫 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">A</span> 名片庫（Rolodex）</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:flex-end">
+          <div><div style="font-weight:600;font-size:20px">名片庫</div><div style="font-size:12px;color:var(--tt);margin-top:2px">47 位聯絡人 · 44 家公司</div></div>
+          <div style="width:34px;height:34px;border-radius:999px;background:#F5F5F4;display:flex;align-items:center;justify-content:center">⌕</div>
+        </div>
+        <!-- filter chips -->
+        <div style="display:flex;gap:7px;padding:12px 16px 4px;overflow-x:auto">
+          <span class="chip" style="background:var(--primary);color:#fff">全部 47</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--ts)">💤 沉睡 18</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--ts)">最近收錄</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--warning)">待確認 3</span>
+        </div>
+        <!-- contact rows -->
+        <div style="padding:8px 16px 0">
+          <!-- row 1 -->
+          <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px;flex-shrink:0">ADL</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between"><div style="font-weight:600;font-size:15px">陳志偉</div><span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">💤 16 月</span></div>
+              <div style="font-size:12px;color:var(--ts)">凌華科技 · 業務經理</div>
+              <div class="ai-strip" style="background:var(--ai-bg);border-radius:0 7px 7px 0;padding:5px 9px;margin-top:6px;font-size:11.5px;line-height:1.4">工業電腦、邊緣 AI、嵌入式系統</div>
+            </div>
+          </div>
+          <!-- row 2 -->
+          <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px;flex-shrink:0">ADV</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between"><div style="font-weight:600;font-size:15px">林佩珊</div><span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">💤 13 月</span></div>
+              <div style="font-size:12px;color:var(--ts)">研華科技 · 產品經理</div>
+              <div class="ai-strip" style="background:var(--ai-bg);border-radius:0 7px 7px 0;padding:5px 9px;margin-top:6px;font-size:11.5px;line-height:1.4">嵌入式物聯網平台、工業自動化</div>
+            </div>
+          </div>
+          <!-- row 3 -->
+          <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px;flex-shrink:0">TSM</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:15px">吳承恩</div>
+              <div style="font-size:12px;color:var(--ts)">台達電子 · 資深協理</div>
+              <div class="ai-strip" style="background:var(--ai-bg);border-radius:0 7px 7px 0;padding:5px 9px;margin-top:6px;font-size:11.5px;line-height:1.4">電源管理、工業自動化、儲能</div>
+            </div>
+          </div>
+          <!-- row 4 processing -->
+          <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px;flex-shrink:0;background:#F5F5F4;color:var(--ts)">IEI</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:15px">黃國棟</div>
+              <div style="font-size:12px;color:var(--ts)">威強電 · 專案副理</div>
+              <div style="margin-top:6px"><span class="chip" style="background:#F5F5F4;color:var(--ts)">✦ AI 辨識公司中…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- privacy strip -->
+      <div style="background:var(--priv-bg);color:var(--priv-tx);font-size:11px;padding:6px 16px;text-align:center;flex-shrink:0">🔒 全部預設私人，只有你看得到</div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px;box-shadow:0 4px 10px rgba(217,119,6,.35)">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--tt)">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">名片庫不只是通訊錄——<b>每一列都帶著 AI 看懂的公司在做什麼</b>，還標了「💤 沉睡幾個月」。這是把「一疊卡」變成「看得懂的資產」。</div>
+  </div>
+
+  <!-- B 聯絡人詳情 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">B</span> 聯絡人詳情 · AI 透明三區</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <!-- header -->
+        <div style="padding:14px 16px 0;display:flex;gap:13px">
+          <div class="avatar en" style="width:52px;height:52px;font-size:16px;flex-shrink:0">ADL</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:19px">陳志偉</div>
+            <div style="font-size:13px;color:var(--ts)">凌華科技 ADLINK · 業務經理</div>
+            <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
+              <span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">💤 沉睡 16 個月</span>
+              <span class="chip" style="background:#F5F5F4;color:var(--ts)">Computex 2024 收</span>
+            </div>
+          </div>
+        </div>
+        <!-- quick actions -->
+        <div style="display:flex;gap:8px;padding:14px 16px 0">
+          <button class="btn btn-p en" style="flex:1">撥號</button>
+          <button class="btn btn-o en" style="flex:1">Email</button>
+          <button class="btn btn-o en" style="flex:1">複製</button>
+        </div>
+
+        <!-- ZONE 1 名片原文 -->
+        <div class="sect">① 名片原文（你收到的）</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px">
+          <div class="mono" style="font-size:12.5px;line-height:1.9;color:var(--tp)">
+            <div>陳志偉 / David Chen</div>
+            <div>業務經理 Sales Manager</div>
+            <div>+886 2 8226 5877</div>
+            <div>chen@adlink.com</div>
+          </div>
+        </div>
+
+        <!-- ZONE 2 AI 公司補全 -->
+        <div class="sect">② AI 看懂公司（M6）</div>
+        <div class="ai-strip" style="margin:0 16px;background:var(--ai-bg);border-radius:0 12px 12px 0;padding:12px">
+          <div style="font-size:11px;color:var(--ai-tx);font-weight:600">主要產品 / 服務</div>
+          <div style="font-size:13.5px;line-height:1.55;margin-top:4px">工業電腦、邊緣 AI 推論系統、嵌入式運算平台、機器視覺</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px">
+            <span class="chip" style="background:var(--ai-badge);color:var(--ai-tx)">✦ AI 補全 · 官網 · 88%</span>
+            <span style="font-size:11px;color:var(--info)">更新公司資訊 ↻</span>
+          </div>
+        </div>
+
+        <!-- ZONE 3 AI 職責推估 -->
+        <div class="sect">③ AI 推估個人負責（M3）</div>
+        <div class="ai-strip" style="margin:0 16px;background:var(--ai-bg);border-radius:0 12px 12px 0;padding:12px">
+          <div style="font-size:13.5px;line-height:1.55">可能負責<b>邊緣運算產品線的業務開發</b>，是談合作/採購的對口窗口。</div>
+          <div style="margin-top:9px"><span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">✦ AI 推估 · 不確定，僅供參考</span></div>
+        </div>
+        <!-- Pro LinkedIn (Next) -->
+        <div style="margin:12px 16px 20px">
+          <button class="btn btn-o en" style="width:100%">🔎 從 LinkedIn 補充，讓推估更準（Pro）</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px;box-shadow:0 4px 10px rgba(217,119,6,.35)">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--tt)">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">產品的信任核心：<b>三區視覺分明</b>——① 名片原文（你收的）② AI 看懂公司 ③ AI 推估職責。AI 的東西一律藍條 + 來源/信心 badge，<b>絕不假裝是名片上寫的</b>。</div>
+  </div>
+
+  <!-- C 待確認 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">C</span> 待確認 · 延後最低確認</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body" style="display:flex;flex-direction:column">
+        <div style="padding:14px 16px 0">
+          <div style="font-weight:600;font-size:20px">待確認 <span style="font-size:13px;color:var(--warning)">· 還有 3 張</span></div>
+          <div style="font-size:12px;color:var(--ts);margin-top:3px">只要確認<b>姓名 / 公司</b>對不對，其他 AI 都處理好了</div>
+        </div>
+        <!-- swipe card -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px">
+          <div style="width:100%;background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 8px 24px rgba(28,25,23,.1);overflow:hidden">
+            <div style="height:120px;background:#292524;display:flex;align-items:center;justify-content:center">
+              <div style="width:210px;height:88px;background:#fff;border-radius:7px;padding:11px;transform:rotate(-2deg)">
+                <div style="font-weight:700;font-size:13px">林佩珊</div>
+                <div style="font-size:9px;color:var(--ts)">研華科技 · 產品經理</div>
+                <div class="mono" style="font-size:8px;color:var(--tt);margin-top:9px">+886 2 2792 7818</div>
+              </div>
+            </div>
+            <div style="padding:14px 15px">
+              <div style="font-size:11px;color:var(--tt);margin-bottom:4px">姓名</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:16px;font-weight:600">林佩珊 <span style="width:7px;height:7px;border-radius:999px;background:var(--success)"></span></div>
+              <div style="font-size:11px;color:var(--tt);margin:12px 0 4px">公司</div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:16px;font-weight:600">研華科技 <span style="width:7px;height:7px;border-radius:999px;background:var(--warning)"></span> <span style="font-size:11px;color:var(--warning);font-weight:400">建議確認</span></div>
+            </div>
+            <div style="display:flex;border-top:1px solid var(--border)">
+              <div style="flex:1;text-align:center;padding:13px;color:var(--ts);font-size:14px;border-right:1px solid var(--border)">← 跳過</div>
+              <div style="flex:1;text-align:center;padding:13px;color:var(--success);font-weight:600;font-size:14px">確認 →</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:12px;color:var(--tt);padding-bottom:14px">右滑確認 · 左滑跳過 · <span style="color:var(--ts)">稍後再說</span></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--tt)">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px;box-shadow:0 4px 10px rgba(217,119,6,.35)">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600;position:relative">✓<span>待確認</span><span class="en" style="position:absolute;top:-2px;right:22px;background:var(--warning);color:#fff;font-size:9px;width:15px;height:15px;border-radius:999px;display:flex;align-items:center;justify-content:center">3</span></div>
+        <div class="tab" style="color:var(--tt)">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">不懲罰「沒整理」的習慣：<b>只確認姓名/公司兩個</b>，Tinder 式右滑確認。低信心才亮橘點。永遠可以「稍後」，<b>不阻擋搜尋</b>。</div>
+  </div>
+
+  <!-- D 我的 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">D</span> 我的（Account Hub · Free）</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div style="padding:16px 16px 0;font-weight:600;font-size:20px">我的</div>
+        <!-- account -->
+        <div style="margin:14px 16px 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:13px">
+          <div class="avatar en" style="width:48px;height:48px;font-size:16px">Yu</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:16px">于先生</div>
+            <div class="mono" style="font-size:11.5px;color:var(--ts)">you@example.com</div>
+          </div>
+          <span class="chip" style="background:#F5F5F4;color:var(--ts);font-weight:600">Free</span>
+        </div>
+
+        <div class="sect">本期用量</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>對話搜尋</span><span class="mono" style="color:var(--ts)">12 / 30 日</span></div>
+          <div class="bar"><i style="width:40%"></i></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin:12px 0 5px"><span>即時上網查</span><span class="mono" style="color:var(--ts)">1 / 5 月</span></div>
+          <div class="bar"><i style="width:20%"></i></div>
+        </div>
+
+        <div class="sect">搜尋偏好 · 精準度</div>
+        <div style="margin:0 16px">
+          <div class="seg"><div class="on">精準</div><div>平衡</div><div style="color:var(--tt)">探索 🔒</div></div>
+          <div style="font-size:11px;color:var(--tt);margin-top:6px;line-height:1.5">「探索」放寬匹配並可搜公開商務池 —— <span style="color:var(--info)">升級 Pro 解鎖</span></div>
+        </div>
+
+        <div class="sect">資料與隱私</div>
+        <div style="margin:0 16px;background:var(--priv-bg);border-radius:12px;padding:12px;font-size:12.5px;color:var(--priv-tx);line-height:1.55">🔒 你收的名片<b>預設私人</b>，永遠不會被其他使用者搜尋。</div>
+
+        <!-- upgrade -->
+        <div style="margin:16px 16px 20px;background:linear-gradient(90deg,var(--primary),#12657a);border-radius:14px;padding:15px;color:#fff">
+          <div style="font-weight:600;font-size:15px">升級 Pro</div>
+          <div style="font-size:12px;opacity:.85;margin-top:4px;line-height:1.5">資料常保準確 · LinkedIn 補充 · 搜平台公開商務身份</div>
+          <button class="btn en" style="background:#fff;color:var(--primary);width:100%;margin-top:11px">看方案</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--tt)">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px;box-shadow:0 4px 10px rgba(217,119,6,.35)">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">Account Hub 只放<b>核心必要</b>：方案、用量、搜尋精準度、隱私、升級 CTA。<b>刻意不放</b>企業組織/收款後台（在 Later/凍結區）。</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -64,7 +64,6 @@ def _card_detail(card: RawCard) -> CardDetailResponse:
 
 
 def _card_list_item(card: RawCard) -> CardListItem:
-    fields = card.ocr_result.extracted_fields if card.ocr_result else {}
     return CardListItem(
         id=card.id,
         status=card.status,
@@ -74,6 +73,7 @@ def _card_list_item(card: RawCard) -> CardListItem:
         source_label=card.source_label,
         image_url=public_media_url(card.image_url),
         created_at=card.created_at,
+        version=card.version,
         ocr_summary=_ocr_summary(card.ocr_result),
     )
 

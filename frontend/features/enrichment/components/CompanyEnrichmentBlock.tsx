@@ -39,7 +39,7 @@ export function CompanyEnrichmentBlock({
   if (enrichment.status === "pending") {
     return (
       <section className="rounded-xl border border-[var(--color-ai-border)] bg-[var(--color-ai-bg)] p-4">
-        <h2 className="mb-2 text-sm font-medium text-[var(--color-ai-text)]">公司補全</h2>
+        <h2 className="mb-2 text-sm font-medium text-[var(--color-ai-text)]">主要產品 / 服務</h2>
         <p className="animate-pulse text-sm text-[var(--color-text-secondary)]">⏳ 正在補充公司資訊…</p>
       </section>
     );
@@ -48,7 +48,7 @@ export function CompanyEnrichmentBlock({
   if (enrichment.status === "failed") {
     return (
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 className="mb-2 text-sm font-medium text-[var(--color-text-secondary)]">公司補全</h2>
+        <h2 className="mb-2 text-sm font-medium text-[var(--color-text-secondary)]">主要產品 / 服務</h2>
         <p className="text-sm text-[var(--color-text-tertiary)]">無法取得公開資訊，可稍後再試或確認公司名稱。</p>
         {refreshButton}
         {refreshError && (
@@ -61,7 +61,7 @@ export function CompanyEnrichmentBlock({
   if (enrichment.status === "rejected") {
     return (
       <section className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 className="mb-1 text-sm font-medium text-[var(--color-text-secondary)]">公司補全</h2>
+        <h2 className="mb-1 text-sm font-medium text-[var(--color-text-secondary)]">主要產品 / 服務</h2>
         <p className="text-xs text-[var(--color-text-tertiary)]">已隱藏 AI 補全內容</p>
         {refreshButton}
       </section>
@@ -73,7 +73,7 @@ export function CompanyEnrichmentBlock({
   return (
     <section className="rounded-xl border border-[var(--color-ai-border)] bg-[var(--color-ai-bg)] p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-[var(--color-ai-text)]">公司補全</h2>
+        <h2 className="text-sm font-medium text-[var(--color-ai-text)]">主要產品 / 服務</h2>
         {enrichment.status === "partial" && (
           <span className="rounded bg-[var(--color-accent-muted)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent-hover)]">
             資訊不足

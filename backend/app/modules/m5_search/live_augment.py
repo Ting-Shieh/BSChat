@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.entitlements import consume_live_augment_quota, live_augment_remaining
+from app.core.team import get_team_user_ids
 from app.models.company import Company
 from app.models.contact import Contact
 from app.models.query_augmentation import QueryAugmentation
@@ -33,9 +34,10 @@ def _company_is_stale(company: Company | None) -> bool:
 async def should_suggest_live(db: AsyncSession, user: User, contact_ids: list[uuid.UUID]) -> bool:
     if live_augment_remaining(user.entitlement) <= 0:
         return False
+    team_ids = set(await get_team_user_ids(db, user.id))
     for cid in contact_ids[:10]:
         contact = await db.get(Contact, cid)
-        if not contact or contact.user_id != user.id or not contact.company_id:
+        if not contact or contact.user_id not in team_ids or not contact.company_id:
             continue
         company = await db.get(Company, contact.company_id)
         if _company_is_stale(company):
@@ -110,6 +112,7 @@ async def run_live_augment(
     filter_ids = set(contact_ids) if contact_ids else None
     target_company_ids: list[uuid.UUID] = []
     seen: set[uuid.UUID] = set()
+    team_ids = set(await get_team_user_ids(db, user.id))
 
     for row in rows:
         if filter_ids is not None and row.contact_id not in filter_ids:
@@ -117,7 +120,7 @@ async def run_live_augment(
         if row.live_products:
             continue
         contact = await db.get(Contact, row.contact_id)
-        if not contact or contact.user_id != user.id or not contact.company_id:
+        if not contact or contact.user_id not in team_ids or not contact.company_id:
             continue
         if contact.company_id in seen:
             continue

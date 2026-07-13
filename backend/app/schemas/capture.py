@@ -62,6 +62,7 @@ class CardListItem(BaseModel):
     source_label: str | None
     image_url: str | None
     created_at: datetime
+    version: int = 1
     ocr_summary: OcrResultSummary | None = None
 
     model_config = {"from_attributes": True}

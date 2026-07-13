@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import CurrentUser
 from app.core.db import get_db
 from app.models.company import Company, CompanyEnrichment
+from app.models.user import User
 from app.modules.m3_5_person.service import (
     get_status as person_enrich_status,
     reject_person_enrich,
@@ -43,12 +44,14 @@ async def get_contacts(
 ) -> ContactListResponse:
     items, total = await list_contacts(db, user.id, page=page, limit=limit, review_status=review_status)
     previews = await _batch_list_enrichment(db, items)
+    capturer_names = await _batch_capturer_names(db, items)
     return ContactListResponse(
         items=[
             to_list_item(
                 c,
                 company_products_preview=previews.get(c.id, {}).get("preview"),
                 company_enrichment_status=previews.get(c.id, {}).get("status"),
+                captured_by_name=capturer_names.get(c.user_id),
             )
             for c in items
         ],
@@ -93,6 +96,7 @@ async def patch_contact(
         "email": "email",
         "linkedin_url": "linkedin_url",
         "person_scope": "person_scope",
+        "personal_note": "personal_note",
     }
     updates = {field_map[k]: v for k, v in payload.items() if k in field_map}
 
@@ -181,6 +185,14 @@ async def reject_person_enrich_endpoint(
 ) -> PersonEnrichResponse:
     result = await reject_person_enrich(db, user, contact_id)
     return PersonEnrichResponse(**result)
+
+
+async def _batch_capturer_names(db: AsyncSession, contacts: list) -> dict:
+    user_ids = {c.user_id for c in contacts if c.user_id}
+    if not user_ids:
+        return {}
+    rows = await db.execute(select(User.id, User.display_name).where(User.id.in_(user_ids)))
+    return {uid: name for uid, name in rows.all()}
 
 
 async def _batch_list_enrichment(db: AsyncSession, contacts: list) -> dict:

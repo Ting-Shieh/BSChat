@@ -39,6 +39,8 @@ class Contact(Base):
     person_scope_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     person_enrich_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     person_enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Human-entered note (preferences / relationship / reminders). AI never writes this.
+    personal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

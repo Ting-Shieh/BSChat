@@ -12,6 +12,9 @@ export interface ContactListItem {
   emails_preview: string | null;
   company_products_preview?: string | null;
   company_enrichment_status?: string | null;
+  captured_by_name?: string | null;
+  created_at?: string | null;
+  dormant_months?: number | null;
 }
 
 export interface CompanyEnrichmentSection {
@@ -80,6 +83,8 @@ export interface ContactDetail {
   source_label: string | null;
   review_status: string;
   image_url: string | null;
+  personal_note?: string | null;
+  captured_by_name?: string | null;
   version: number;
   created_at: string;
   updated_at: string;

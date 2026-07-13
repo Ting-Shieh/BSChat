@@ -12,7 +12,7 @@ export function PrivacyStrip({ className }: PrivacyStripProps) {
         className,
       )}
     >
-      僅搜尋您的人脈與自願公開的商務身份 · 不存取他人私人資料
+      僅團隊內可見 · 不對外公開搜尋 · 不存取他人私人資料
     </p>
   );
 }

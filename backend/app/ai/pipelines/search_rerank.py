@@ -10,7 +10,7 @@ from app.modules.m5_search.precision import DEFAULT_PRECISION, precision_rerank_
 from app.modules.m5_search.retrieval import CandidateDoc
 
 settings = get_settings()
-PROMPT_VERSION = "v4"
+PROMPT_VERSION = "v5"
 
 RERANK_PROMPT = """You are a B2B contact search assistant. Rank contacts from the user's rolodex (private and/or public business directory entries).
 
@@ -33,7 +33,9 @@ Return JSON only:
       "match_reason": "≤200 chars Traditional Chinese",
       "match_sources": [
         {{ "field": "company_products|responsibility_scope|title|company_name|source_label", "value": "...", "confidence": 0.0-1.0 }}
-      ]
+      ],
+      "collaboration_note": "≤80 chars Traditional Chinese — 這個人對此需求可能的合作切入點/角色（若無把握可省略）",
+      "opening_line": "≤160 chars Traditional Chinese — 一句可直接傳給對方的破冰開場白，具體貼合此需求與對方公司/角色"
     }}
   ]
 }}
@@ -44,7 +46,9 @@ Guidelines:
 - match_score reflects your confidence in relevance (for ranking/display only)
 - If hard constraints are listed, exclude anyone who fails them; return fewer or zero results rather than partial matches
 - match_sources must cite real candidate fields
-- Use Traditional Chinese for match_reason
+- Use Traditional Chinese for match_reason, collaboration_note, opening_line
+- opening_line: write it in first person as if the user is messaging the contact; reference the query need and the contact's company/product when possible; do NOT invent facts not in the candidate data
+- If you are not confident enough to write a useful opening_line, set it to null rather than fabricating
 - Never return a contact whose match_reason admits they fail a hard constraint
 """
 
@@ -122,12 +126,16 @@ def _mock_rerank(
         if c.get("title"):
             sources.append(MatchSource(field="title", value=c["title"]))
 
+        name = c.get("display_name") or "您好"
+        company = c.get("company_name") or ""
         scored.append(
             RerankItem(
                 contact_id=cid,
                 match_score=min(score, 0.95),
-                match_reason=f"與「{query}」相關：{c.get('display_name')} · {c.get('company_name') or ''}",
+                match_reason=f"與「{query}」相關：{c.get('display_name')} · {company}",
                 match_sources=sources,
+                collaboration_note=f"{company}與此需求可能相關，值得聯繫確認" if company else None,
+                opening_line=f"{name}您好，關於「{query}」，想跟您聊聊有沒有合作的空間。",
             )
         )
 

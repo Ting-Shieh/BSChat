@@ -28,24 +28,34 @@ export function LoginForm() {
   const [planTier, setPlanTier] = useState<PlanTier>("free");
   const [email, setEmail] = useState(DEV_ACCOUNT_BY_PLAN.free.email);
   const [displayName, setDisplayName] = useState(DEV_ACCOUNT_BY_PLAN.free.displayName);
+  const [companyCode, setCompanyCode] = useState("");
 
   function selectPlan(tier: PlanTier) {
     setPlanTier(tier);
     const preset = DEV_ACCOUNT_BY_PLAN[tier];
     setEmail(preset.email);
     setDisplayName(preset.displayName);
+    if (tier === "enterprise" && !companyCode.trim()) {
+      setCompanyCode("acme-demo");
+    }
   }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    const org =
+      companyCode.trim().toLowerCase() ||
+      (planTier === "enterprise" ? "acme-demo" : undefined);
     login.mutate(
       {
         email,
         display_name: displayName,
         plan_tier: planTier,
-        seed_org: planTier === "enterprise" ? "acme-demo" : undefined,
+        seed_org: org || undefined,
       },
-      { onSuccess: () => router.push(planTier === "enterprise" ? "/admin/org" : "/contacts") },
+      {
+        onSuccess: () =>
+          router.push(planTier === "enterprise" && org === "acme-demo" ? "/admin/org" : "/contacts"),
+      },
     );
   }
 
@@ -107,6 +117,23 @@ export function LoginForm() {
           onChange={(e) => setDisplayName(e.target.value)}
           className={inputClass}
         />
+      </div>
+      <div>
+        <label htmlFor="org" className="mb-1 block text-sm text-[var(--color-text-secondary)]">
+          公司代號（團隊共享）
+        </label>
+        <input
+          id="org"
+          type="text"
+          value={companyCode}
+          onChange={(e) => setCompanyCode(e.target.value)}
+          placeholder="例：acme-demo（同代號＝同一團隊池）"
+          className={inputClass}
+          autoComplete="organization"
+        />
+        <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
+          填了才進團隊共享池；留空則只有自己看得到。
+        </p>
       </div>
       {login.error && (
         <p className="text-sm text-[var(--color-error)]">登入失敗，請確認後端已啟動。</p>

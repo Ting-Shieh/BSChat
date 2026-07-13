@@ -29,6 +29,7 @@ export interface CardListItem {
   source_label: string | null;
   image_url: string | null;
   created_at: string;
+  version?: number;
   ocr_summary: OcrSummary | null;
 }
 

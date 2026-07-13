@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.entitlements import is_person_enrich_allowed
 from app.core.media_urls import canonical_media_ref
+from app.core.team import get_team_user_ids
 from app.models.contact import Contact, ContactFieldProvenance
 from app.models.contact_search_document import ContactSearchDocument
 from app.modules.m6_enrichment.service import dispatch_company_enrich, trigger_enrich_for_contact
@@ -200,7 +201,8 @@ async def list_contacts(
     limit: int = 50,
     review_status: str | None = None,
 ) -> tuple[list[Contact], int]:
-    q = select(Contact).where(Contact.user_id == user_id, Contact.deleted_at.is_(None))
+    team_ids = await get_team_user_ids(db, user_id)
+    q = select(Contact).where(Contact.user_id.in_(team_ids), Contact.deleted_at.is_(None))
     if review_status:
         q = q.where(Contact.review_status == review_status)
     q = q.order_by(Contact.updated_at.desc())
@@ -213,9 +215,10 @@ async def list_contacts(
 
 
 async def get_contact(db: AsyncSession, contact_id: uuid.UUID, user_id: uuid.UUID) -> Contact | None:
+    team_ids = await get_team_user_ids(db, user_id)
     result = await db.execute(
         select(Contact)
-        .where(Contact.id == contact_id, Contact.user_id == user_id, Contact.deleted_at.is_(None))
+        .where(Contact.id == contact_id, Contact.user_id.in_(team_ids), Contact.deleted_at.is_(None))
         .options(selectinload(Contact.provenance))
     )
     return result.scalar_one_or_none()
@@ -263,6 +266,8 @@ async def update_contact_fields(
         contact.emails = _emails_json([email]) if email else []
     if "linkedin_url" in fields:
         contact.linkedin_url = _normalize_optional_str(fields["linkedin_url"])
+    if "personal_note" in fields:
+        contact.personal_note = _normalize_optional_str(fields["personal_note"])
     if "person_scope" in fields:
         if entitlement is None or not is_person_enrich_allowed(entitlement):
             raise HTTPException(status_code=403, detail="PERSON_ENRICH_NOT_ALLOWED")

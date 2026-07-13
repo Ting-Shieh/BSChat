@@ -18,6 +18,9 @@ class ContactListItem(BaseModel):
     emails_preview: str | None = None
     company_products_preview: str | None = None
     company_enrichment_status: str | None = None
+    captured_by_name: str | None = None
+    created_at: datetime | None = None
+    dormant_months: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -113,6 +116,7 @@ class ContactUpdateFields(BaseModel):
     email: str | None = None
     linkedin_url: str | None = None
     person_scope: str | None = None
+    personal_note: str | None = None
 
 
 class ContactUpdateRequest(BaseModel):
@@ -135,6 +139,8 @@ class ContactDetailResponse(BaseModel):
     source_label: str | None
     review_status: str
     image_url: str | None
+    personal_note: str | None = None
+    captured_by_name: str | None = None
     version: int
     sections: ContactSections
     created_at: datetime

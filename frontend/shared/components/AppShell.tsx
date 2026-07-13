@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useLogout, useMe, useSwitchPlan } from "@/features/auth/hooks";
-import type { PlanTier } from "@/shared/types/auth";
+import { useMe } from "@/features/auth/hooks";
 import { useAuthHydrated } from "@/features/auth/useAuthHydrated";
 import { usePendingCount } from "@/features/capture/hooks";
 import { useAuthStore } from "@/features/auth/store";
 import { cn } from "@/shared/lib/cn";
 
 const tabs = [
-  { href: "/search", label: "搜尋" },
-  { href: "/contacts", label: "聯絡人" },
-  { href: "/capture", label: "收錄" },
-  { href: "/review", label: "待確認", badge: true as const },
+  { href: "/search", label: "搜尋", icon: "🔍" },
+  { href: "/contacts", label: "名片庫", icon: "📇" },
+  { href: "/capture", label: "收錄", icon: "＋", elevate: true as const },
+  { href: "/review", label: "待確認", icon: "✓", badge: true as const },
+  { href: "/settings", label: "我的", icon: "👤" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -22,12 +22,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hydrated = useAuthHydrated();
   const token = useAuthStore((s) => s.token);
-  const logout = useLogout();
   const { data: me, isError: meError } = useMe();
-  const switchPlan = useSwitchPlan();
   const { data: pending } = usePendingCount();
-  const isPro = me?.plan_tier === "pro" || me?.plan_tier === "enterprise";
-  const isEnterprise = me?.plan_tier === "enterprise";
+  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
@@ -56,40 +53,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const isEnterprise = me?.plan_tier === "enterprise";
+  const hideChrome =
+    pathname.startsWith("/capture/burst") ||
+    pathname.startsWith("/capture/scan-qr");
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <div>
-          <p className="text-sm font-medium text-[var(--color-text-primary)]">
-            {me?.display_name ?? "BSChat"}
-          </p>
-          <p className="text-xs text-[var(--color-text-tertiary)]">
-            {me?.plan_tier ?? "free"} plan
-            {me?.quotas?.person_linkedin_remaining_month != null && isPro && (
-              <> · LinkedIn 剩 {me.quotas.person_linkedin_remaining_month}</>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={switchPlan.isPending}
-            onClick={() => switchPlan.mutate((isPro ? "free" : "pro") as PlanTier)}
-            className="rounded border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-primary)] disabled:opacity-50"
-          >
-            {isPro ? "改 Free" : "試用 Pro"}
-          </button>
-          <Link
-            href="/settings"
-            className={cn(
-              "text-xs",
-              pathname.startsWith("/settings")
-                ? "font-semibold text-[var(--color-primary)]"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]",
-            )}
-          >
-            設定
-          </Link>
+      {!hideChrome && (
+        <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
+              {me?.display_name ?? "BSChat"}
+            </p>
+            <p className="text-xs text-[var(--color-text-tertiary)]">
+              {me?.plan_tier ?? "free"} plan
+            </p>
+          </div>
           {isEnterprise && (
             <Link
               href="/admin/org"
@@ -97,51 +77,66 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 "text-xs",
                 pathname.startsWith("/admin/org")
                   ? "font-semibold text-[var(--color-primary)]"
-                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]",
+                  : "text-[var(--color-text-secondary)]",
               )}
             >
               公開目錄
             </Link>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              logout();
-              router.push("/login");
-            }}
-            className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
-          >
-            登出
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
       <div className="flex-1">{children}</div>
 
-      <nav className="sticky bottom-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
-        <ul className="flex">
-          {tabs.map((tab) => (
-            <li key={tab.href} className="relative flex-1">
-              <Link
-                href={tab.href}
-                className={cn(
-                  "block py-3 text-center text-sm",
-                  pathname.startsWith(tab.href)
-                    ? "font-semibold text-[var(--color-primary)]"
-                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-                )}
-              >
-                {tab.label}
-                {tab.badge && (pending?.count ?? 0) > 0 && (
-                  <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10px] text-white">
-                    {pending!.count}
-                  </span>
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {!hideChrome && (
+        <nav className="sticky bottom-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
+          <ul className="flex items-end px-1">
+            {tabs.map((tab) => {
+              const active = pathname.startsWith(tab.href);
+              if (tab.elevate) {
+                return (
+                  <li key={tab.href} className="relative flex-1">
+                    <Link
+                      href={tab.href}
+                      className="flex flex-col items-center gap-0.5 pb-2 pt-1 text-[10px] text-[var(--color-text-secondary)]"
+                    >
+                      <span className="-mt-3 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[var(--color-accent)] text-xl font-bold text-white shadow-[0_4px_10px_rgba(217,119,6,0.35)]">
+                        {tab.icon}
+                      </span>
+                      <span className={cn(active && "font-semibold text-[var(--color-primary)]")}>
+                        {tab.label}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={tab.href} className="relative flex-1">
+                  <Link
+                    href={tab.href}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 py-2.5 text-[10px]",
+                      active
+                        ? "font-semibold text-[var(--color-primary)]"
+                        : "text-[var(--color-text-secondary)]",
+                    )}
+                  >
+                    <span className="relative text-base leading-none">
+                      {tab.icon}
+                      {tab.badge && (pending?.count ?? 0) > 0 && (
+                        <span className="absolute -right-2.5 -top-1.5 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--color-warning)] px-0.5 text-[9px] font-semibold text-white">
+                          {pending!.count > 9 ? "9+" : pending!.count}
+                        </span>
+                      )}
+                    </span>
+                    <span>{tab.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
     </div>
   );
 }

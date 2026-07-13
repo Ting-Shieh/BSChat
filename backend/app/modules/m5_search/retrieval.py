@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.embeddings import embed_text, vector_literal
 from app.ai.schemas.search_rerank import ParsedIntent
+from app.core.team import get_team_user_ids
 from app.models.company import CompanyEnrichment
 from app.models.contact import Contact
 from app.models.contact_search_document import ContactSearchDocument
@@ -96,27 +97,27 @@ def _trgm_query_strings(intent: ParsedIntent, raw_query: str) -> list[str]:
 
 
 async def _private_ts_ids(
-    db: AsyncSession, user_id: uuid.UUID, built: str, lim: int
+    db: AsyncSession, user_ids: list[uuid.UUID], built: str, lim: int
 ) -> list[uuid.UUID]:
     ts_sql = text(
         """
         SELECT csd.contact_id
         FROM contact_search_documents csd
         JOIN contacts c ON c.id = csd.contact_id
-        WHERE csd.user_id = :user_id
+        WHERE csd.user_id = ANY(:user_ids)
           AND c.deleted_at IS NULL
           AND csd.search_vector @@ websearch_to_tsquery('simple', :q)
         ORDER BY ts_rank(csd.search_vector, websearch_to_tsquery('simple', :q)) DESC
         LIMIT :lim
         """
     )
-    rows = (await db.execute(ts_sql, {"user_id": user_id, "q": built, "lim": lim})).all()
+    rows = (await db.execute(ts_sql, {"user_ids": user_ids, "q": built, "lim": lim})).all()
     return [r[0] for r in rows]
 
 
 async def _private_trgm_ids(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    user_ids: list[uuid.UUID],
     intent: ParsedIntent,
     query_text: str,
     lim: int,
@@ -129,7 +130,7 @@ async def _private_trgm_ids(
         SELECT csd.contact_id
         FROM contact_search_documents csd
         JOIN contacts c ON c.id = csd.contact_id
-        WHERE csd.user_id = :user_id
+        WHERE csd.user_id = ANY(:user_ids)
           AND c.deleted_at IS NULL
           AND similarity(csd.search_text, :q) > :min_score
         ORDER BY similarity(csd.search_text, :q) DESC
@@ -142,7 +143,7 @@ async def _private_trgm_ids(
         for row in (
             await db.execute(
                 trgm_sql,
-                {"user_id": user_id, "q": q, "lim": lim, "min_score": TRGM_MIN_SCORE},
+                {"user_ids": user_ids, "q": q, "lim": lim, "min_score": TRGM_MIN_SCORE},
             )
         ).all():
             cid = row[0]
@@ -153,14 +154,14 @@ async def _private_trgm_ids(
 
 
 async def _private_vector_ids(
-    db: AsyncSession, user_id: uuid.UUID, query_vec: str, lim: int
+    db: AsyncSession, user_ids: list[uuid.UUID], query_vec: str, lim: int
 ) -> list[uuid.UUID]:
     vec_sql = text(
         """
         SELECT csd.contact_id
         FROM contact_search_documents csd
         JOIN contacts c ON c.id = csd.contact_id
-        WHERE csd.user_id = :user_id
+        WHERE csd.user_id = ANY(:user_ids)
           AND c.deleted_at IS NULL
           AND csd.embedding IS NOT NULL
         ORDER BY csd.embedding <=> CAST(:qvec AS vector)
@@ -168,7 +169,7 @@ async def _private_vector_ids(
         """
     )
     try:
-        rows = (await db.execute(vec_sql, {"user_id": user_id, "qvec": query_vec, "lim": lim})).all()
+        rows = (await db.execute(vec_sql, {"user_ids": user_ids, "qvec": query_vec, "lim": lim})).all()
         return [r[0] for r in rows]
     except Exception:
         return []
@@ -268,12 +269,14 @@ async def retrieve_candidates(
     built = build_retrieval_query(intent, query_text)
     semantic = build_semantic_query(intent, query_text)
 
-    ts_ids = await _private_ts_ids(db, user_id, built, lim)
-    trgm_ids = await _private_trgm_ids(db, user_id, intent, query_text, lim, ts_ids)
+    user_ids = await get_team_user_ids(db, user_id)
+
+    ts_ids = await _private_ts_ids(db, user_ids, built, lim)
+    trgm_ids = await _private_trgm_ids(db, user_ids, intent, query_text, lim, ts_ids)
     vector_ids: list[uuid.UUID] = []
     qvec = await _query_embedding(intent, query_text)
     if qvec:
-        vector_ids = await _private_vector_ids(db, user_id, qvec, lim)
+        vector_ids = await _private_vector_ids(db, user_ids, qvec, lim)
 
     merged = rrf_merge([ts_ids, trgm_ids, vector_ids], k=settings.search_hybrid_rrf_k)
     widened = False
@@ -284,13 +287,13 @@ async def retrieve_candidates(
             SELECT csd.contact_id, csd.search_text
             FROM contact_search_documents csd
             JOIN contacts c ON c.id = csd.contact_id
-            WHERE csd.user_id = :user_id
+            WHERE csd.user_id = ANY(:user_ids)
               AND c.deleted_at IS NULL
             LIMIT :lim
             """
         )
         rows = list(
-            (await db.execute(rescue_sql, {"user_id": user_id, "lim": min(lim, WIDENED_POOL_LIMIT)})).all()
+            (await db.execute(rescue_sql, {"user_ids": user_ids, "lim": min(lim, WIDENED_POOL_LIMIT)})).all()
         )
         widened = bool(rows)
         merged = [(row[0], 0.0) for row in rows]
@@ -495,12 +498,13 @@ async def _products_for(db: AsyncSession, company_id: uuid.UUID | None) -> tuple
 
 
 async def count_indexed(db: AsyncSession, user_id: uuid.UUID) -> int:
+    team_ids = await get_team_user_ids(db, user_id)
     result = await db.execute(
         select(func.count())
         .select_from(ContactSearchDocument)
         .join(Contact, Contact.id == ContactSearchDocument.contact_id)
         .where(
-            ContactSearchDocument.user_id == user_id,
+            ContactSearchDocument.user_id.in_(team_ids),
             Contact.deleted_at.is_(None),
         )
     )

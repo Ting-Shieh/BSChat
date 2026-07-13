@@ -24,6 +24,8 @@ class RerankItem(BaseModel):
     match_score: float
     match_reason: str
     match_sources: list[MatchSource] = Field(default_factory=list)
+    opening_line: str | None = None
+    collaboration_note: str | None = None
 
 
 class SearchRerankResponse(BaseModel):

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 收錄→商機簡報 完整流程</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --color-primary:#0F4C5C; --color-primary-hover:#0B3A47; --color-primary-muted:#E6F2F5;
+    --color-accent:#D97706; --color-accent-hover:#B45309; --color-accent-muted:#FEF3C7;
+    --color-bg:#FAFAF9; --color-surface:#FFFFFF; --color-border:#E7E5E4;
+    --color-text-primary:#1C1917; --color-text-secondary:#57534E; --color-text-tertiary:#A8A29E;
+    --color-success:#059669; --color-warning:#D97706; --color-error:#DC2626; --color-info:#0284C7;
+    --color-ai-bg:#EFF6FF; --color-ai-border:#BFDBFE; --color-ai-text:#1E40AF; --color-ai-badge:#DBEAFE;
+    --color-privacy-bg:#F0FDF4; --color-privacy-text:#166534;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#57534E;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--color-text-primary);-webkit-font-smoothing:antialiased;padding:24px 12px}
+  .num,.en{font-family:'Outfit',system-ui,sans-serif}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .stage{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;justify-content:center;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .caption{color:#E7E5E4;font-size:12.5px;max-width:390px;text-align:center;line-height:1.6}
+  .caption b{color:#fff}
+  .step-no{display:inline-flex;align-items:center;gap:7px;color:#fff;font-size:13px;font-weight:600}
+  .step-no .n{width:22px;height:22px;border-radius:999px;background:var(--color-accent);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .arrow{align-self:center;color:#A8A29E;font-size:26px;padding-top:120px}
+  .phone{width:390px;background:var(--color-bg);border-radius:26px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.3);position:relative;height:720px}
+  .sb{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:12px;font-weight:600}
+  .chip{font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .shimmer{background:linear-gradient(90deg,#F5F5F4 25%,#E7E5E4 50%,#F5F5F4 75%);background-size:200% 100%;animation:sh 1.3s infinite}
+  @keyframes sh{to{background-position:-200% 0}}
+  .ai-strip{border-left:3px solid var(--color-ai-border)}
+  .flyin{animation:fly .5s cubic-bezier(.4,0,.2,1) both}
+  @keyframes fly{from{opacity:0;transform:translateY(14px) scale(.9)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div style="text-align:center;color:#fff;margin-bottom:20px">
+  <div class="en" style="font-size:15px;font-weight:600;letter-spacing:.3px;opacity:.85">BSChat · 業務 persona 完整流程原型</div>
+  <div style="font-size:12px;color:#D6D3D1;margin-top:3px">拍名片 → AI 看懂公司 → 一句需求 → 商機簡報（左到右）</div>
+</div>
+
+<div class="stage">
+
+  <!-- STEP 1 收錄 -->
+  <div class="col">
+    <div class="step-no"><span class="n num">1</span> 收錄 · 連拍（零必填）</div>
+    <div class="phone">
+      <div class="sb"><span class="num">9:41</span><span class="num" style="letter-spacing:1px">5G 100%</span></div>
+      <!-- camera viewfinder -->
+      <div style="position:relative;height:560px;background:#1C1917;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 42%,#3f3f46,#1C1917 70%)"></div>
+        <!-- card being captured -->
+        <div style="position:relative;width:250px;height:150px;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.4);padding:16px;transform:rotate(-3deg)">
+          <div style="font-weight:700;font-size:15px;color:#1C1917">陳志偉</div>
+          <div style="font-size:11px;color:#57534E;margin-top:2px">凌華科技 ADLINK</div>
+          <div style="font-size:10px;color:#57534E">邊緣運算解決方案 · 業務經理</div>
+          <div class="mono" style="font-size:9px;color:#78716C;margin-top:14px">+886 2 8226 5877 · chen@adlink.com</div>
+        </div>
+        <!-- viewfinder corners -->
+        <div style="position:absolute;width:290px;height:190px;border:2px solid rgba(255,255,255,.5);border-radius:14px"></div>
+        <!-- thumbnail strip -->
+        <div style="position:absolute;bottom:14px;left:14px;display:flex;gap:7px">
+          <div class="flyin" style="width:40px;height:26px;border-radius:5px;background:#fff;border:2px solid #fff;animation-delay:0s"></div>
+          <div class="flyin" style="width:40px;height:26px;border-radius:5px;background:#fff;border:2px solid #fff;animation-delay:.15s"></div>
+          <div class="flyin" style="width:40px;height:26px;border-radius:5px;background:#fff;border:2px solid var(--color-accent);animation-delay:.3s"></div>
+        </div>
+        <div class="num" style="position:absolute;bottom:20px;right:16px;color:#fff;font-size:12px;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:999px">已拍 3 張</div>
+      </div>
+      <!-- shutter -->
+      <div style="height:120px;background:#292524;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <div style="color:#D6D3D1;font-size:12px">對準名片，連續拍 —— <b style="color:#fff">不用填任何欄位</b></div>
+        <div style="width:64px;height:64px;border-radius:999px;background:var(--color-accent);border:4px solid #fff;box-shadow:0 0 0 2px var(--color-accent)"></div>
+      </div>
+    </div>
+    <div class="caption">收名片像<b>拍照</b>，不像填表。展覽現場一次連拍，<b>當下零必填</b>——整理這件事，本來就不該由你做。</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- STEP 2 AI 看懂公司 -->
+  <div class="col">
+    <div class="step-no"><span class="n num">2</span> AI 默默看懂這些公司</div>
+    <div class="phone">
+      <div class="sb"><span class="num">9:42</span><span class="num" style="letter-spacing:1px">5G 100%</span></div>
+      <div style="padding:14px 16px 0">
+        <div style="font-weight:600;font-size:18px">名片庫</div>
+        <div style="font-size:12px;color:var(--color-text-tertiary);margin-top:2px">你剛收的 3 張 · AI 正在補全</div>
+      </div>
+      <!-- job pill -->
+      <div style="margin:12px 16px 0;background:var(--color-primary-muted);color:var(--color-primary);font-size:12px;padding:8px 12px;border-radius:8px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px">✦</span> AI 正在看懂這些公司在做什麼…（你沒填任何字）
+      </div>
+      <!-- card A done -->
+      <div style="margin:12px 16px;background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:12px">
+        <div style="font-weight:600;font-size:15px">陳志偉 <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">· 凌華科技 · 業務經理</span></div>
+        <div class="ai-strip" style="margin-top:8px;background:var(--color-ai-bg);border-radius:0 8px 8px 0;padding:7px 10px">
+          <div style="font-size:12.5px;color:var(--color-text-primary);line-height:1.5">工業電腦、邊緣 AI 推論、嵌入式系統</div>
+          <div style="margin-top:5px"><span class="chip" style="background:var(--color-ai-badge);color:var(--color-ai-text)">✦ AI 補全 · 官網 · 88%</span></div>
+        </div>
+      </div>
+      <!-- card B done -->
+      <div style="margin:12px 16px;background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:12px">
+        <div style="font-weight:600;font-size:15px">林佩珊 <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">· 研華科技 · 產品經理</span></div>
+        <div class="ai-strip" style="margin-top:8px;background:var(--color-ai-bg);border-radius:0 8px 8px 0;padding:7px 10px">
+          <div style="font-size:12.5px;color:var(--color-text-primary);line-height:1.5">嵌入式物聯網平台、工業自動化</div>
+          <div style="margin-top:5px"><span class="chip" style="background:var(--color-ai-badge);color:var(--color-ai-text)">✦ AI 補全 · 官網 · 82%</span></div>
+        </div>
+      </div>
+      <!-- card C shimmering -->
+      <div style="margin:12px 16px;background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:12px">
+        <div style="font-weight:600;font-size:15px">黃國棟 <span style="font-size:12px;color:var(--color-text-secondary);font-weight:400">· 威強電 · 專案副理</span></div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+          <div class="shimmer" style="height:12px;border-radius:4px;flex:1"></div>
+          <span class="chip" style="background:#F5F5F4;color:var(--color-text-secondary)">辨識中…</span>
+        </div>
+      </div>
+    </div>
+    <div class="caption">關鍵差異點：<b>你什麼都沒填，AI 已經知道每家公司在做什麼。</b>這就是「把收納變成價值」的第一哩——名片不再只是聯絡方式，是<b>看得懂的情報</b>。</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- STEP 3 需求來了，問一句 -->
+  <div class="col">
+    <div class="step-no"><span class="n num">3</span> 需求來了 · 問一句</div>
+    <div class="phone">
+      <div class="sb"><span class="num">14:30</span><span class="num" style="letter-spacing:1px">5G 96%</span></div>
+      <div style="padding:16px 16px 0">
+        <div style="font-weight:600;font-size:18px;color:var(--color-primary)">找商機</div>
+      </div>
+      <!-- empty-ish prompt -->
+      <div style="padding:40px 22px 0;text-align:center">
+        <div style="font-size:40px">💬</div>
+        <div style="font-weight:600;font-size:17px;margin-top:10px;line-height:1.5">你的名片庫<br/>現在能回答問題了</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);margin-top:8px;line-height:1.6">別記名字、別記公司。<br/>用你當下的需求問它。</div>
+      </div>
+      <!-- suggested -->
+      <div style="padding:24px 18px 0">
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">試試這樣問（或直接打字）</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:#fff;border:1px solid var(--color-border);border-radius:10px;padding:11px 13px;font-size:13.5px">我手上有誰做工業電腦的？</div>
+          <div style="background:var(--color-primary);color:#fff;border-radius:10px;padding:11px 13px;font-size:13.5px;box-shadow:0 3px 10px rgba(15,76,92,.25)">我們下季要推邊緣 AI 方案，有沒有可以談合作的人？</div>
+          <div style="background:#fff;border:1px solid var(--color-border);border-radius:10px;padding:11px 13px;font-size:13.5px">上次展覽收到做自動化的那些人是誰？</div>
+        </div>
+      </div>
+      <!-- input -->
+      <div style="position:absolute;bottom:16px;left:14px;right:14px">
+        <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--color-border);border-radius:999px;padding:6px 6px 6px 14px;box-shadow:0 2px 8px rgba(28,25,23,.06)">
+          <span style="font-size:15px">💬</span>
+          <input placeholder="用一句話描述你要找什麼…" style="flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent" />
+          <button class="en" style="width:34px;height:34px;border-radius:999px;background:var(--color-primary);color:#fff;border:none;font-size:15px">↑</button>
+        </div>
+      </div>
+    </div>
+    <div class="caption">這裡是心臟：<b>你不用記任何人</b>。事件驅動的當下，用<b>自然語言的需求</b>反向問——把「翻抽屜、回想、Google」全部收斂成一句話。</div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- STEP 4 商機簡報 -->
+  <div class="col">
+    <div class="step-no"><span class="n num">4</span> 商機簡報（殺手時刻）</div>
+    <div class="phone" style="overflow-y:auto">
+      <div class="sb"><span class="num">14:30</span><span class="num" style="letter-spacing:1px">5G 96%</span></div>
+      <!-- user bubble -->
+      <div style="display:flex;justify-content:flex-end;padding:10px 16px 4px">
+        <div style="max-width:82%;background:var(--color-primary);color:#fff;padding:11px 13px;border-radius:14px 14px 4px 14px;font-size:13.5px;line-height:1.55">我們下季要推工業電腦的<b>邊緣 AI</b>方案，有沒有可以談合作的人？</div>
+      </div>
+      <!-- synthesis -->
+      <div style="margin:8px 16px;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:13px">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+          <div style="width:24px;height:24px;border-radius:7px;background:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:13px">✦</div>
+          <div style="font-weight:600;font-size:12.5px;color:var(--color-primary)">翻過你整個名片庫了</div>
+        </div>
+        <div style="font-size:14px;line-height:1.6">翻了 <b class="num">47</b> 張，<b style="color:var(--color-accent)">3 位</b>對得上「工業電腦 × 邊緣 AI」，其中 <b>2 位你一年沒聯絡</b>了。</div>
+      </div>
+      <!-- opp card 1 -->
+      <div style="margin:0 16px 10px;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:13px;box-shadow:0 1px 3px rgba(28,25,23,.05)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600;font-size:16px">陳志偉</div>
+            <div style="font-size:12px;color:var(--color-text-secondary)">凌華科技 · 業務經理</div>
+          </div>
+          <div class="num" style="text-align:center"><div style="font-size:10px;color:var(--color-text-tertiary)">對得上</div><div style="font-weight:700;font-size:17px;color:var(--color-success)">92%</div></div>
+        </div>
+        <div style="margin-top:9px"><span class="chip" style="background:var(--color-accent-muted);color:var(--color-accent-hover);font-weight:600">💤 沉睡 16 個月 · Computex 2024</span></div>
+        <div class="ai-strip" style="background:var(--color-ai-bg);border-radius:0 9px 9px 0;padding:9px 11px;margin-top:9px">
+          <div style="font-size:13px;line-height:1.55">凌華主力就是工業電腦＋邊緣 AI，他在業務端、是談合作對口。</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:6px;padding-top:6px;border-top:1px dashed var(--color-ai-border)"><span class="chip" style="background:var(--color-info);color:#fff;margin-right:4px">🌐 即時查到</span>上月剛發表新一代邊緣 AI 伺服器</div>
+        </div>
+        <div style="margin-top:10px;background:var(--color-accent-muted);border:1px solid #FDE68A;border-radius:9px;padding:10px 11px">
+          <div style="font-size:10.5px;font-weight:700;color:var(--color-accent-hover);margin-bottom:4px">✍️ 幫你想好的開場白</div>
+          <div style="font-size:12.5px;line-height:1.6;color:#451A03">陳經理您好，Computex 見過面。看到貴司上月發表新一代邊緣 AI 伺服器，我們下季有個邊緣 AI 方案，想聊聊合作空間。</div>
+        </div>
+      </div>
+      <!-- opp card 2 (compact) -->
+      <div style="margin:0 16px 10px;background:#fff;border:1px solid var(--color-border);border-radius:14px;padding:13px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600;font-size:16px">林佩珊</div>
+            <div style="font-size:12px;color:var(--color-text-secondary)">研華科技 · 產品經理</div>
+          </div>
+          <div class="num" style="text-align:center"><div style="font-size:10px;color:var(--color-text-tertiary)">對得上</div><div style="font-weight:700;font-size:17px;color:var(--color-success)">84%</div></div>
+        </div>
+        <div style="margin-top:9px"><span class="chip" style="background:var(--color-accent-muted);color:var(--color-accent-hover);font-weight:600">💤 沉睡 13 個月</span></div>
+        <div class="ai-strip" style="background:var(--color-ai-bg);border-radius:0 9px 9px 0;padding:9px 11px;margin-top:9px">
+          <div style="font-size:13px;line-height:1.55">研華嵌入式平台是工業電腦核心；她是 PM，能幫你導到對的產品線窗口。</div>
+        </div>
+      </div>
+      <!-- honesty -->
+      <div style="text-align:center;padding:6px 20px 20px;font-size:12px;color:var(--color-text-tertiary);line-height:1.65">其餘 <b class="num" style="color:var(--color-text-secondary)">44</b> 張我判斷對不上，<b style="color:var(--color-text-secondary)">沒有硬湊給你</b>。</div>
+    </div>
+    <div class="caption">收斂成一份<b>業務助理的簡報</b>：撈出你忘了的人、告訴你為什麼、給你開場白、誠實說「其餘沒硬湊」。<b>這一刻，才不是名片王。</b></div>
+  </div>
+
+</div>
+</body>
+</html>

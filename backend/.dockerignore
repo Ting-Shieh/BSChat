@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.env.*
+!.env.dogfood.example
+storage/
+tests/
+*.md
+!README.md
+.ruff_cache

@@ -34,6 +34,7 @@ export type ContactUpdateFields = {
   email?: string;
   linkedin_url?: string;
   person_scope?: string;
+  personal_note?: string;
 };
 
 export async function updateContact(

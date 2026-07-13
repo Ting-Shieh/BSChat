@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 團隊版:AI 自動整理名片情報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --primary:#0F4C5C; --primary-hover:#0B3A47; --primary-muted:#E6F2F5;
+    --accent:#D97706; --accent-hover:#B45309; --accent-muted:#FEF3C7;
+    --bg:#FAFAF9; --surface:#fff; --border:#E7E5E4;
+    --tp:#1C1917; --ts:#57534E; --tt:#A8A29E;
+    --success:#059669; --warning:#D97706; --info:#0284C7;
+    --ai-bg:#EFF6FF; --ai-bd:#BFDBFE; --ai-tx:#1E40AF; --ai-badge:#DBEAFE;
+    --team-bg:#F5F3FF; --team-tx:#6D28D9; --team-bd:#DDD6FE;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#57534E;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--tp);-webkit-font-smoothing:antialiased;padding:26px 14px 50px}
+  .en{font-family:'Outfit',system-ui,sans-serif}.mono{font-family:'JetBrains Mono',monospace}
+  .head{text-align:center;color:#fff;margin-bottom:22px}
+  .head .t{font-size:16px;font-weight:600}.head .s{font-size:12px;color:#D6D3D1;margin-top:3px}
+  .stage{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;align-items:flex-start;max-width:1000px;margin:0 auto}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .phone{width:400px;height:760px;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.3);display:flex;flex-direction:column}
+  .sb{height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:12px;font-weight:600;flex-shrink:0}
+  .body{flex:1;overflow-y:auto}.body::-webkit-scrollbar{width:0}
+  .chip{font-size:10.5px;line-height:1;padding:5px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .ai-strip{border-left:3px solid var(--ai-bd)}
+  .sect{font-size:11px;color:var(--tt);font-weight:600;letter-spacing:.4px;margin:16px 16px 7px;display:flex;align-items:center;gap:6px}
+  .field{margin:0 16px 9px;background:var(--ai-bg);border-radius:0 11px 11px 0;padding:10px 12px}
+  .field .k{font-size:11px;color:var(--ai-tx);font-weight:600}
+  .field .v{font-size:13.5px;line-height:1.55;margin-top:3px}
+  .edit{font-size:11px;color:var(--info);float:right}
+  .cap{color:#E7E5E4;font-size:12.5px;max-width:400px;text-align:center;line-height:1.6}.cap b{color:#fff}
+  .before{background:#fff;border:1px dashed var(--border);border-radius:12px;margin:0 16px;padding:12px}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="t">BSChat 團隊版 · AI 自動整理名片情報</div>
+  <div class="s">以前業務助理手打的 Excel,現在 AI 先寫好草稿</div>
+</div>
+
+<div class="stage">
+  <div class="col">
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <!-- header -->
+        <div style="padding:14px 16px 0;display:flex;gap:13px">
+          <div class="en" style="width:52px;height:52px;border-radius:12px;background:var(--primary-muted);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0">ADL</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:19px">陳志偉</div>
+            <div style="font-size:13px;color:var(--ts)">凌華科技 ADLINK · 業務經理</div>
+            <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
+              <span class="chip" style="background:var(--team-bg);color:var(--team-tx);border:1px solid var(--team-bd)">👥 團隊共享 · 收錄者 王大明</span>
+              <span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">💤 沉睡 16 月</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- hero: AI did the work -->
+        <div style="margin:14px 16px 0;background:linear-gradient(90deg,var(--primary),#12657a);border-radius:12px;padding:13px 14px;color:#fff">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px">✦ AI 已自動整理成情報卡</div>
+          <div style="font-size:12px;opacity:.9;margin-top:4px;line-height:1.5">以前這張表要業務助理一格一格打。現在 AI 先寫好,你只要看過、微調不對的地方。</div>
+        </div>
+
+        <div class="sect">✦ AI 自動填(可改)</div>
+
+        <div class="field">
+          <span class="edit">編輯 ✎</span>
+          <div class="k">公司主要產品</div>
+          <div class="v">工業電腦、邊緣 AI 推論系統、嵌入式運算平台、機器視覺</div>
+          <div style="margin-top:6px"><span class="chip" style="background:var(--ai-badge);color:var(--ai-tx)">✦ 官網 · 88%</span></div>
+        </div>
+
+        <div class="field">
+          <span class="edit">編輯 ✎</span>
+          <div class="k">個人負責業務(推估)</div>
+          <div class="v">邊緣運算產品線業務開發,談合作/採購對口窗口</div>
+          <div style="margin-top:6px"><span class="chip" style="background:var(--accent-muted);color:var(--accent-hover)">✦ AI 推估 · 不確定</span></div>
+        </div>
+
+        <div class="field">
+          <span class="edit">編輯 ✎</span>
+          <div class="k">特質</div>
+          <div class="v">技術背景業務、回覆積極、偏好直接談規格與交期</div>
+          <div style="margin-top:6px"><span class="chip" style="background:var(--ai-badge);color:var(--ai-tx)">✦ 依過往互動與公開資料推估</span></div>
+        </div>
+
+        <div class="field">
+          <span class="edit">編輯 ✎</span>
+          <div class="k">過去經歷</div>
+          <div class="v">曾任職研華嵌入式部門 6 年,2022 轉入凌華邊緣運算 BU</div>
+          <div style="margin-top:6px"><span class="chip" style="background:var(--ai-badge);color:var(--ai-tx)">✦ LinkedIn 公開摘要</span></div>
+        </div>
+
+        <div class="field" style="background:#F0FDF4;border-left-color:#86EFAC">
+          <span class="edit" style="color:var(--success)">編輯 ✎</span>
+          <div class="k" style="color:var(--success)">合作可能性</div>
+          <div class="v"><b>高</b> —— 產品線與我方邊緣 AI 方案直接互補,可談 OEM/代理</div>
+          <div style="margin-top:6px"><span class="chip" style="background:#DCFCE7;color:#166534">✦ AI 評估 · 供參考</span></div>
+        </div>
+
+        <!-- v1.1 manual note -->
+        <div class="sect">✍️ 人工備註(喜好/請客 · v1.1)</div>
+        <div style="margin:0 16px 16px;background:#fff;border:1px dashed var(--border);border-radius:11px;padding:12px;font-size:12.5px;color:var(--tt)">
+          （手動填,AI 不猜）例:愛喝單一麥芽、忌海鮮、上次聊到小孩念交大…
+        </div>
+      </div>
+
+      <div style="background:#F5F3FF;color:var(--team-tx);font-size:11px;padding:7px 16px;text-align:center;flex-shrink:0;border-top:1px solid var(--team-bd)">👥 這張卡全團隊看得到(公司政策:名片＝公司資產)</div>
+    </div>
+    <div class="cap"><b>這就是 v3 的靈魂</b>:業務助理原本要手打的「特質/經歷/合作可能性」,<b>AI 全部先寫好草稿</b>,她只要微調。而且整張卡<b>全團隊共用</b>——採購、業務、你,都看得到、都能搜。</div>
+  </div>
+</div>
+</body>
+</html>

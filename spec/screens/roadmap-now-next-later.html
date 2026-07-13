@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 優先順序總圖(全部保留 · 排先後 · AI 脊椎)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --primary:#0F4C5C; --accent:#D97706; --bg:#FAFAF9; --surface:#fff; --border:#E7E5E4;
+    --tp:#1C1917; --ts:#57534E; --tt:#A8A29E; --success:#059669; --info:#0284C7;
+    --ai-bg:#EFF6FF; --ai-tx:#1E40AF; --amber-bg:#FEF3C7; --amber-tx:#B45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--tp);padding:32px 20px 60px}
+  .en{font-family:'Outfit',system-ui,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:var(--ts);font-size:14px;margin-bottom:20px}
+  .banner{background:linear-gradient(90deg,var(--primary),#12657a);color:#fff;border-radius:14px;padding:15px 20px;margin-bottom:14px}
+  .banner .m{font-size:15px;font-weight:600;line-height:1.5}
+  .banner .s{font-size:12.5px;opacity:.85;margin-top:4px}
+  .ai-note{background:var(--ai-bg);border:1px solid #BFDBFE;border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--ai-tx);margin-bottom:24px}
+  .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .col{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .col.p1{border-top:5px solid var(--success)}
+  .col.p2{border-top:5px solid var(--info)}
+  .col.p3{border-top:5px solid var(--tt)}
+  .ch{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px}
+  .ch .k{font-size:18px;font-weight:700}
+  .ch .w{font-size:11px;color:var(--tt);font-weight:600}
+  .cn{font-size:12px;color:var(--ts);margin-bottom:13px;line-height:1.5}
+  .item{display:flex;gap:9px;padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:9px;align-items:flex-start}
+  .no{width:22px;height:22px;border-radius:999px;background:#F5F5F4;color:var(--ts);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+  .p1 .no{background:#DCFCE7;color:#166534}
+  .it{font-weight:600;font-size:13.5px;line-height:1.35}
+  .iw{font-size:11.5px;color:var(--ts);margin-top:3px;line-height:1.5}
+  .ai{font-size:10px;background:var(--ai-bg);color:var(--ai-tx);padding:2px 7px;border-radius:999px;font-weight:600;margin-left:6px;white-space:nowrap}
+  .built{font-size:10px;color:var(--amber-tx);background:var(--amber-bg);padding:2px 7px;border-radius:999px;font-weight:600;margin-left:6px}
+  .legend{margin-top:22px;font-size:12px;color:var(--ts);display:flex;flex-wrap:wrap;gap:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>BSChat 優先順序總圖 · 2026-07-13</h1>
+  <div class="sub">全部功能都保留,只排先後。從左到右做。</div>
+
+  <div class="banner">
+    <div class="m">「都要」——同意。但「都要」不等於「一起做」。</div>
+    <div class="s">過去 13 個月卡住,就是想一起做。排序,是把你救出來的藥。Later 不是砍掉,是排到後面。</div>
+  </div>
+  <div class="ai-note">✦ = 這一格用 AI 當引擎。你看:每一階段的核心動作都是 AI,沒有一格是「純收納」——這就是不跟外面一樣的原因。</div>
+
+  <div class="cols">
+
+    <!-- Phase 1 -->
+    <div class="col p1">
+      <div class="ch"><span class="k">Phase 1</span><span class="w">現在 · dogfood 自家團隊</span></div>
+      <div class="cn">先做到「你自己團隊天天用」。這是可出貨的最小版本。</div>
+
+      <div class="item"><div class="no">1</div><div><div class="it">AI 自動整理情報卡<span class="ai">✦ AI</span></div><div class="iw">公司產品/職責/特質/經歷/合作可能性——取代業務助理手打 Excel</div></div></div>
+      <div class="item"><div class="no">2</div><div><div class="it">AI 對話反向找商機<span class="ai">✦ AI</span><span class="built">已建</span></div><div class="iw">一句需求 → 商機簡報(為什麼是他+開場白)</div></div></div>
+      <div class="item"><div class="no">3</div><div><div class="it">團隊共享池</div><div class="iw">一池名片全團隊搜;v1 預設共享,單一設定</div></div></div>
+      <div class="item"><div class="no">4</div><div><div class="it">收錄(連拍/QR/連結)<span class="built">已建</span></div><div class="iw">零必填、背景 OCR</div></div></div>
+      <div class="item"><div class="no">5</div><div><div class="it">AI 透明三區 + 沉睡喚醒<span class="ai">✦ AI</span></div><div class="iw">原文/AI補全分明;標「💤沉睡N月」撈回遺忘商機</div></div></div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="col p2">
+      <div class="ch"><span class="k">Phase 2</span><span class="w">團隊驗證有效後</span></div>
+      <div class="cn">把情報做得更準、更會幫你行動。</div>
+
+      <div class="item"><div class="no">6</div><div><div class="it">AI LinkedIn/上網查(更準)<span class="ai">✦ AI</span><span class="built">部分已建</span></div><div class="iw">補個人經歷、公司近況;別再卡官方 API,先用公開搜尋過渡</div></div></div>
+      <div class="item"><div class="no">7</div><div><div class="it">AI 生成開場白 / follow-up<span class="ai">✦ AI</span></div><div class="iw">找到人後直接給破冰句、可當話題的近況</div></div></div>
+      <div class="item"><div class="no">8</div><div><div class="it">公司政策旋鈕(共享/私有設定)</div><div class="iw">讓不同公司自己決定名片是不是公司資產</div></div></div>
+      <div class="item"><div class="no">9</div><div><div class="it">喜好/請客備註(人工)</div><div class="iw">愛喝什麼、忌口——手動填,AI 不猜</div></div></div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="col p3">
+      <div class="ch"><span class="k">Phase 3</span><span class="w">Later · 都要,但 PMF 後</span></div>
+      <div class="cn">擴張與變現。全部保留,排在核心站穩之後。</div>
+
+      <div class="item"><div class="no">10</div><div><div class="it">AI 外部供應商發現<span class="ai">✦ AI 核心擴張</span></div><div class="iw">採購從「自家池以外」撈出沒見過的新合作商(雙邊池/Pool B)——你「發現新商機」的關鍵</div></div></div>
+      <div class="item"><div class="no">11</div><div><div class="it">對外版(賣給其他公司/業務團隊)</div><div class="iw">dogfood 驗證後,把工具賣出去(願景 C)</div></div></div>
+      <div class="item"><div class="no">12</div><div><div class="it">收款後台 + 多租戶</div><div class="iw">分級計費、帳號隔離——對外賣才需要</div></div></div>
+      <div class="item"><div class="no">13</div><div><div class="it">用量 / 曝光報表</div><div class="iw">團隊用量、被搜次數等治理數據</div></div></div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <span>🟢 Phase 1＝可出貨最小版(dogfood)</span>
+    <span>🔵 Phase 2＝驗證後增強</span>
+    <span>⚪ Phase 3＝Later(都保留,PMF 後)</span>
+    <span style="color:var(--ai-tx)">✦＝AI 當引擎</span>
+    <span style="color:var(--amber-tx)">已建＝現有 code 可用</span>
+  </div>
+</div>
+</body>
+</html>

@@ -35,6 +35,7 @@ from app.modules.m5_search.sample_queries import pick_sample_queries
 from app.modules.m5_search.live_augment import should_suggest_live
 from app.modules.m5_search.validate import apply_confirmed_boost, validate_rerank_item
 from app.schemas.search import (
+    BriefingDTO,
     ContactPreviewDTO,
     CreateSearchQueryRequest,
     MatchSourceDTO,
@@ -48,6 +49,33 @@ from app.schemas.search import (
     SearchStatusResponse,
     StubPreviewDTO,
 )
+
+DORMANT_THRESHOLD_MONTHS = 6
+
+
+def _dormant_months(created_at: datetime | None) -> int | None:
+    """Proxy for 'time since last touched': months since the card was captured.
+
+    v1 has no explicit last_contacted_at; capture time is the honest stand-in
+    (see PRD v3 商機簡報 · dormant hook).
+    """
+    if created_at is None:
+        return None
+    now = datetime.now(UTC)
+    ref = created_at if created_at.tzinfo else created_at.replace(tzinfo=UTC)
+    days = (now - ref).days
+    if days < 0:
+        return None
+    return days // 30
+
+
+def _build_briefing_headline(*, scanned: int, match_count: int, dormant_count: int) -> str:
+    if match_count == 0:
+        return f"翻過你名片庫的 {scanned} 張，這次沒有對得上的。"
+    parts = [f"翻過你名片庫的 {scanned} 張，有 {match_count} 位跟這個需求對得上。"]
+    if dormant_count > 0:
+        parts.append(f"其中 {dormant_count} 位你已超過半年沒動作，差點被埋在抽屜裡。")
+    return "".join(parts)
 
 
 def _search_debug_enabled() -> bool:
@@ -416,6 +444,15 @@ async def execute_search(
     results_dto: list[SearchResultItemDTO] = []
     private_ids: list[uuid.UUID] = []
 
+    private_combined_ids = [entity.contact_id for pool, _, _, entity in combined if pool == "private"]
+    dormant_map: dict[uuid.UUID, int | None] = {}
+    if private_combined_ids:
+        rows = await db.execute(
+            select(Contact.id, Contact.created_at).where(Contact.id.in_(private_combined_ids))
+        )
+        for cid, created in rows.all():
+            dormant_map[cid] = _dormant_months(created)
+
     for rank, (pool, score, item, entity) in enumerate(combined, start=1):
         sources = [
             MatchSourceDTO(field=s.field, value=s.value, confidence=s.confidence)
@@ -424,6 +461,9 @@ async def execute_search(
         if pool == "private":
             cand = entity
             private_ids.append(cand.contact_id)
+            opening_line = getattr(item, "opening_line", None)
+            collaboration_note = getattr(item, "collaboration_note", None)
+            dormant = dormant_map.get(cand.contact_id)
             db.add(
                 SearchResult(
                     query_id=query_row.id,
@@ -433,6 +473,9 @@ async def execute_search(
                     match_reason=item.match_reason,
                     match_sources=[s.model_dump() for s in sources],
                     source_pool="private_rolodex",
+                    opening_line=opening_line,
+                    collaboration_note=collaboration_note,
+                    dormant_months=dormant,
                 )
             )
             results_dto.append(
@@ -444,6 +487,9 @@ async def execute_search(
                     match_sources=sources,
                     source_pool="private_rolodex",
                     contact_preview=_preview_from_candidate(cand),
+                    opening_line=opening_line,
+                    collaboration_note=collaboration_note,
+                    dormant_months=dormant,
                 )
             )
         else:
@@ -467,11 +513,30 @@ async def execute_search(
     query_row.degraded = degraded
     query_row.suggest_live = await should_suggest_live(db, user, private_ids) if private_ids else False
     suggest_live_flag = query_row.suggest_live
+
+    briefing: BriefingDTO | None = None
+    if private_combined_ids:
+        dormant_count = sum(
+            1
+            for cid in private_combined_ids
+            if (dormant_map.get(cid) or 0) >= DORMANT_THRESHOLD_MONTHS
+        )
+        briefing = BriefingDTO(
+            headline=_build_briefing_headline(
+                scanned=indexed, match_count=len(private_ids), dormant_count=dormant_count
+            ),
+            scanned_count=indexed,
+            match_count=len(private_ids),
+            dormant_count=dormant_count,
+        )
+
+    stored = dict(query_row.parsed_intent or {})
     if debug_dto:
         debug_dto = debug_dto.model_copy(update={"result_count": len(results_dto)})
-        stored = dict(query_row.parsed_intent or {})
         stored["search_debug"] = debug_dto.model_dump()
-        query_row.parsed_intent = stored
+    if briefing:
+        stored["briefing"] = briefing.model_dump()
+    query_row.parsed_intent = stored
     await db.commit()
 
     aha = not had_prior and len(results_dto) > 0
@@ -484,6 +549,7 @@ async def execute_search(
         aha_moment=aha,
         suggest_live=suggest_live_flag,
         results=results_dto,
+        briefing=briefing,
         debug=debug_dto,
     )
 
@@ -591,8 +657,14 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
                 source_pool=row.source_pool or "private_rolodex",
                 contact_preview=_preview_from_candidate(cand),
                 live_products=row.live_products if row.live_products else None,
+                opening_line=row.opening_line,
+                collaboration_note=row.collaboration_note,
+                dormant_months=row.dormant_months,
             )
         )
+
+    stored_briefing = (query_row.parsed_intent or {}).get("briefing")
+    briefing = BriefingDTO.model_validate(stored_briefing) if stored_briefing else None
 
     return SearchQueryResponse(
         query_id=query_row.id,
@@ -602,5 +674,6 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
         degraded=query_row.degraded,
         suggest_live=query_row.suggest_live,
         results=items,
+        briefing=briefing,
         debug=_debug_from_stored(query_row.parsed_intent),
     )

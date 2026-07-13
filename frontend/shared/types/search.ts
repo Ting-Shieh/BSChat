@@ -50,6 +50,9 @@ export interface SearchResultItem {
   publisher_org_name?: string | null;
   external_card_url?: string | null;
   live_products?: string[] | null;
+  opening_line?: string | null;
+  collaboration_note?: string | null;
+  dormant_months?: number | null;
 }
 
 export interface SearchEmptyState {
@@ -94,6 +97,13 @@ export interface SearchDebugInfo {
   latency_ms?: number | null;
 }
 
+export interface Briefing {
+  headline: string;
+  scanned_count: number;
+  match_count: number;
+  dormant_count: number;
+}
+
 export interface SearchQueryResponse {
   query_id: string;
   status: string;
@@ -103,6 +113,7 @@ export interface SearchQueryResponse {
   aha_moment?: boolean;
   suggest_live?: boolean;
   results?: SearchResultItem[];
+  briefing?: Briefing | null;
   empty_state?: SearchEmptyState;
   debug?: SearchDebugInfo | null;
 }

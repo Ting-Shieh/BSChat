@@ -83,12 +83,21 @@ export function SearchResultCard({
 
   const phone = preview.phones[0];
   const email = preview.emails[0];
+  const dormant = item.dormant_months ?? null;
+  const isDormant = dormant !== null && dormant >= 6;
 
   return (
     <article className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
-        你的名片庫
-      </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">
+          你的名片庫
+        </span>
+        {isDormant && (
+          <span className="inline-block rounded-full bg-[var(--color-accent-muted)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-accent-hover)]">
+            💤 沉睡 {dormant} 個月
+          </span>
+        )}
+      </div>
       <Link href={`/contacts/${item.contact_id}?from_search=${queryId}&rank=${item.rank}`} className="mt-2 block">
         <div className="relative">
           <ContactPreviewCard preview={preview} />
@@ -107,15 +116,40 @@ export function SearchResultCard({
         </div>
       )}
 
-      <p className="mt-3 rounded-lg bg-[var(--color-ai-bg)] px-3 py-2 text-sm text-[var(--color-ai-text)]">
-        {item.match_reason}
-        {item.live_products && item.live_products.length > 0 && (
-          <span className="ml-2 inline-block rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
-            即時查詢
-          </span>
+      <div className="mt-3 rounded-lg bg-[var(--color-ai-bg)] px-3 py-2 text-sm text-[var(--color-ai-text)]">
+        <p className="text-[10px] font-semibold text-[var(--color-ai-text)] opacity-70">為什麼是他</p>
+        <p className="mt-0.5">
+          {item.match_reason}
+          {item.live_products && item.live_products.length > 0 && (
+            <span className="ml-2 inline-block rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
+              即時查詢
+            </span>
+          )}
+        </p>
+        {item.collaboration_note && (
+          <p className="mt-1.5 border-t border-dashed border-[var(--color-ai-border)] pt-1.5 text-xs text-[var(--color-text-secondary)]">
+            🤝 {item.collaboration_note}
+          </p>
         )}
-      </p>
+      </div>
       <MatchSourceChips sources={item.match_sources} />
+
+      {item.opening_line && (
+        <div className="mt-3 rounded-lg border border-[#FDE68A] bg-[var(--color-accent-muted)] px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-[var(--color-accent-hover)]">✍️ 幫你想好的開場白</span>
+            <button
+              type="button"
+              onClick={() => void copy(item.opening_line!, "開場白")}
+              className="copybtn rounded-full bg-[var(--color-accent)] px-2.5 py-1 text-[11px] font-semibold text-white active:scale-95"
+              aria-label={`複製 ${preview.display_name ?? "聯絡人"} 的開場白`}
+            >
+              複製
+            </button>
+          </div>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[#451A03]">{item.opening_line}</p>
+        </div>
+      )}
 
       {(phone || email) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">

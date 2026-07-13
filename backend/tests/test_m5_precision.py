@@ -398,7 +398,7 @@ async def test_search_debug_payload_when_enabled(monkeypatch):
         debug = body.get("debug")
         assert debug is not None
         assert debug["intent_prompt_version"] == "v3"
-        assert debug["rerank_prompt_version"] == "v4"
+        assert debug["rerank_prompt_version"] == "v5"
         assert debug["private"]["pool"] == "private"
         assert debug["rerank_input_count"] >= 1
         assert "IoT" in debug["parsed_intent"].get("keywords", [])

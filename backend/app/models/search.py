@@ -47,4 +47,7 @@ class SearchResult(Base):
     match_sources: Mapped[list] = mapped_column(JSONB, default=list)
     live_products: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     source_pool: Mapped[str] = mapped_column(String(30), default="private_rolodex")
+    opening_line: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collaboration_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dormant_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
