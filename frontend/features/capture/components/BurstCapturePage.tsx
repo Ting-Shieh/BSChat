@@ -117,7 +117,7 @@ export function BurstCapturePage() {
   const processingCount = thumbnails.filter((t) => !isTerminal(t.status)).length;
 
   return (
-    <div className="theme-camera flex min-h-full flex-col bg-black text-[var(--color-text-primary)]">
+    <div className="theme-camera flex min-h-dvh flex-1 flex-col bg-black text-[var(--color-text-primary)]">
       <header className="flex items-center justify-between px-4 py-3 text-white">
         <Link href="/capture" className="text-sm text-zinc-400">
           返回
@@ -144,11 +144,15 @@ export function BurstCapturePage() {
         />
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center bg-zinc-900">
+      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-900">
         <p className="mb-6 text-center text-sm text-zinc-400">
-          {!sessionReady ? "正在準備收錄…" : "點擊下方快門拍攝名片"}
+          {!sessionReady
+            ? "正在準備收錄…"
+            : initError
+              ? "無法連上伺服器"
+              : "點擊下方快門拍攝名片"}
           <br />
-          {sessionReady && "可使用相機或相簿"}
+          {sessionReady && !initError && "可使用相機或相簿"}
         </p>
         {initError && <p className="mb-4 text-sm text-red-400">{initError}</p>}
         <input
@@ -166,6 +170,11 @@ export function BurstCapturePage() {
           className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-amber-600 ring-4 ring-amber-600/30 disabled:opacity-40"
           aria-label="快門"
         />
+        {processingCount > 0 && (
+          <p className="mt-4 text-center text-xs text-zinc-500">
+            AI 辨識中…（若過久請檢查後端 Gemini key）
+          </p>
+        )}
       </div>
 
       {thumbnails.length > 0 && (
