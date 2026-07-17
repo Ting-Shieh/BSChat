@@ -21,6 +21,8 @@ class PublicBusinessStub(Base):
     responsibility_keywords: Mapped[list] = mapped_column(JSONB, default=list)
     product_keywords: Mapped[list] = mapped_column(JSONB, default=list)
     external_card_url: Mapped[str] = mapped_column(Text)
+    one_line_blurb: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     unpublished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

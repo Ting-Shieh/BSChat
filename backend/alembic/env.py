@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
 from app.core.db import Base
-from app.models import capture, contact, user  # noqa: F401 — register models
+from app.models import (  # noqa: F401
+    capture,
+    contact,
+    enterprise_application,
+    magic_login,
+    organization,
+    team_invite,
+    user,
+)
 
 config = context.config
 if config.config_file_name is not None:

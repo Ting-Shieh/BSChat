@@ -17,6 +17,7 @@ def build_search_text(stub: PublicBusinessStub) -> str:
         stub.display_name or "",
         stub.company_name or "",
         stub.title or "",
+        stub.one_line_blurb or "",
         resp,
         products,
     ]

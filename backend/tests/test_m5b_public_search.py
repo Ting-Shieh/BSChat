@@ -151,16 +151,26 @@ async def test_m5b_pro_network_search(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_m5b_free_network_forbidden():
+async def test_m5b_free_network_forbidden_when_trial_exhausted():
+    from sqlalchemy import select
+
+    from app.models.user import User
+
+    email = f"free-exhausted-{uuid.uuid4()}@example.com"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _login(client, plan_tier="free")
+        token = await _login(client, email=email, plan_tier="free")
+        async with async_session_factory() as db:
+            user = (await db.execute(select(User).where(User.email == email))).scalar_one()
+            await db.refresh(user, attribute_names=["entitlement"])
+            user.entitlement.public_recommend_used_lifetime = 2
+            await db.commit()
         resp = await client.post(
             "/api/v1/search/queries",
             headers={"Authorization": f"Bearer {token}"},
             json={"query_text": "工業電腦", "search_scope": "network"},
         )
         assert resp.status_code == 403
-        assert resp.json()["detail"] == "SEARCH_SCOPE_NOT_ALLOWED"
+        assert resp.json()["detail"] == "PUBLIC_RECOMMEND_TRIAL_EXHAUSTED"
 
 
 @pytest.mark.asyncio

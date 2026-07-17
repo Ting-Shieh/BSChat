@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { useSwitchPlan } from "@/features/auth/hooks";
 import type { ContactDetail } from "@/shared/types/contact";
 import type { PersonEnrichSection } from "@/shared/types/contact";
 import { cn } from "@/shared/lib/cn";
 import { usePersonEnrichMutations } from "../hooks";
+
+const UPGRADE_MAIL =
+  "mailto:hello@bschat.app?subject=" + encodeURIComponent("申請升級 BSChat Pro");
 
 const MAX_LEN = 500;
 
@@ -47,18 +49,13 @@ export function PersonEnrichBlock({
   onContactUpdated,
 }: Props) {
   const { enrich, confirm, reject, saveScope } = usePersonEnrichMutations(contactId);
-  const switchPlan = useSwitchPlan();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const linkedInLock = useRef(false);
 
   const busy =
-    enrich.isPending ||
-    confirm.isPending ||
-    reject.isPending ||
-    saveScope.isPending ||
-    switchPlan.isPending;
+    enrich.isPending || confirm.isPending || reject.isPending || saveScope.isPending;
 
   const linkedInBusy = busy || section.status === "pending" || linkedInLock.current;
 
@@ -136,14 +133,12 @@ export function PersonEnrichBlock({
         <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
           Pro 可從 LinkedIn 公開資料更新職責範圍，並標示來源。
         </p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => switchPlan.mutate("pro")}
-          className="mt-4 w-full rounded-lg bg-[var(--color-primary)] py-2.5 text-sm font-medium text-white disabled:opacity-50"
+        <a
+          href={UPGRADE_MAIL}
+          className="mt-4 block w-full rounded-lg bg-[var(--color-primary)] py-2.5 text-center text-sm font-medium text-white"
         >
-          升級 Pro
-        </button>
+          聯絡我們升級 Pro
+        </a>
       </section>
     );
   }

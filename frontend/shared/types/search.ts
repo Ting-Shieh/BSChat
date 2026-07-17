@@ -11,6 +11,9 @@ export interface SearchStatus {
   sample_queries: string[];
   quotas: SearchQuotas;
   public_pool_count?: number;
+  can_use_public_recommend?: boolean;
+  public_recommend_remaining_lifetime?: number;
+  public_recommend_unlimited?: boolean;
 }
 
 export interface MatchSource {

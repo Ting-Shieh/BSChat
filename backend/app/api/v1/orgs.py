@@ -43,11 +43,14 @@ def _to_stub_response(stub) -> StubResponse:
         responsibility_keywords=list(stub.responsibility_keywords or []),
         product_keywords=list(stub.product_keywords or []),
         external_card_url=stub.external_card_url,
+        one_line_blurb=stub.one_line_blurb,
+        avatar_url=stub.avatar_url,
         status=stub.status,
         published_at=stub.published_at,
         unpublished_at=stub.unpublished_at,
         created_at=stub.created_at,
         updated_at=stub.updated_at,
+        share_path=f"/card/{stub.id}" if stub.status == "published" else None,
     )
 
 
@@ -112,6 +115,8 @@ async def post_stub(
         responsibility_keywords=body.responsibility_keywords,
         product_keywords=body.product_keywords,
         external_card_url=body.external_card_url,
+        one_line_blurb=body.one_line_blurb,
+        avatar_url=body.avatar_url,
     )
     return _to_stub_response(stub)
 
@@ -147,6 +152,8 @@ async def patch_stub(
         responsibility_keywords=body.responsibility_keywords,
         product_keywords=body.product_keywords,
         external_card_url=body.external_card_url,
+        one_line_blurb=body.one_line_blurb,
+        avatar_url=body.avatar_url,
     )
     return _to_stub_response(updated)
 

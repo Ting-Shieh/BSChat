@@ -18,7 +18,25 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
 
-    cors_origins: str = "http://localhost:3000"
+    # Auth: dev-login local only; Google OAuth + magic link for team
+    allow_dev_login: bool = True
+    dogfood_default_plan: str = "pro"
+    # Enterprise ops (provision / approve). Empty + allow_dev_login → local dogfood OK.
+    enterprise_ops_token: str | None = None
+    frontend_base_url: str = "http://localhost:3000"
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str | None = None  # e.g. http://localhost:8001/api/v1/auth/google/callback
+    auth_email_domain_allowlist: str = ""  # comma domains; empty = any
+    magic_link_expire_minutes: int = 30
+    resend_api_key: str | None = None
+    resend_from_email: str | None = None
+
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001,"
+        "http://localhost:3002,http://127.0.0.1:3002"
+    )
 
     enable_swagger: bool = True
 

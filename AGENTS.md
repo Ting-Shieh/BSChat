@@ -11,7 +11,7 @@
 |------|------|
 | 專案事實與已確認決策 | `spec/project-context.md` |
 | 模組狀態（誰做到哪、誰阻塞） | `spec/module-register.md` |
-| PRD（需求真相來源） | `spec/BSChat_PRD_v2.md`（現行）+ `spec/BSChat_PRD.md`（原版 L1/L2） |
+| PRD（需求真相來源） | `spec/BSChat_PRD_v4.md`（現行草案）+ `spec/BSChat_PRD_v3.md`（團隊情報層）+ v2／原版 |
 | 技術棧（實作權威 · LOCKED） | `spec/engineering/BSChat_TECH_STACK.md` |
 | 系統架構（per-module SA/SD） | `spec/architecture/BSChat_SA-SD_M<n>.md` |
 | 模組 PM L3 | `spec/modules/BSChat_PM_M<n>.md` |
@@ -51,8 +51,7 @@
 架構 pattern、付費服務、對外介面、資料模型大改——先提案（含 1–2 個替代方案與權衡）再動手。
 小事（命名、folder 結構、慣例內的工具選擇）自己決定，但在產出中標明。
 
-## 當前焦點（2026-06-11）
+## 當前焦點（2026-07-14）
 
-M3.5 個人 LinkedIn 補充（Pro）為唯一活躍前線，狀態「實作進行中（未提交）」，有紅旗：
-`person_search_provider=mock` 仍輸出假資料、data_source 標籤未動態化、缺 ENG spec、4 項產品決策待定。
-詳見 `spec/module-register.md` 與 `spec/product/BSChat_M35_data_source.md`。
+PRD v4 網絡層主軸已收斂實作：**Plan UI**、**M1 終身試用閘**、**M11 電子名片 opt-in＋分享頁**、**M5b 門檻對齊**。  
+煙測／部署（alembic 019–020）延後。Later：收款、個人非企業公開、QR 美化、LinkedIn 官方 API。

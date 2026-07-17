@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useMe } from "@/features/auth/hooks";
 import {
   useCreateStub,
@@ -13,6 +14,7 @@ import {
   useUpdateStub,
 } from "@/features/org/hooks";
 import type { PublicStub } from "@/features/org/api";
+import { EnterpriseRosterPanel } from "@/features/enterprise/components/EnterpriseRosterPanel";
 import { cn } from "@/shared/lib/cn";
 
 const EMPTY_FORM = {
@@ -22,23 +24,26 @@ const EMPTY_FORM = {
   responsibility_keywords: "",
   product_keywords: "",
   external_card_url: "",
+  one_line_blurb: "",
+  avatar_url: "",
 };
 
 type FormState = typeof EMPTY_FORM;
-type PageTab = "list" | "create" | "import";
+type PageTab = "list" | "create" | "import" | "roster";
 type ListFilter = "all" | "published" | "draft" | "unpublished";
 
 const PAGE_TABS: { id: PageTab; label: string }[] = [
   { id: "list", label: "列表" },
   { id: "create", label: "新增" },
   { id: "import", label: "匯入" },
+  { id: "roster", label: "成員" },
 ];
 
 const LIST_FILTERS: { id: ListFilter; label: string }[] = [
   { id: "all", label: "全部" },
-  { id: "published", label: "已發布" },
+  { id: "published", label: "AI 可推薦" },
   { id: "draft", label: "草稿" },
-  { id: "unpublished", label: "已下架" },
+  { id: "unpublished", label: "已關閉推薦" },
 ];
 
 function splitKeywords(value: string) {
@@ -56,6 +61,8 @@ function stubToForm(stub: PublicStub): FormState {
     responsibility_keywords: stub.responsibility_keywords.join(", "),
     product_keywords: stub.product_keywords.join(", "),
     external_card_url: stub.external_card_url,
+    one_line_blurb: stub.one_line_blurb ?? "",
+    avatar_url: stub.avatar_url ?? "",
   };
 }
 
@@ -67,6 +74,8 @@ function formToPayload(form: FormState) {
     responsibility_keywords: splitKeywords(form.responsibility_keywords),
     product_keywords: splitKeywords(form.product_keywords),
     external_card_url: form.external_card_url,
+    one_line_blurb: form.one_line_blurb || null,
+    avatar_url: form.avatar_url || null,
   };
 }
 
@@ -95,6 +104,10 @@ export function OrgAdminPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
 
   const isEnterprise = me?.plan_tier === "enterprise";
+  const isPrimaryAdmin = Boolean(
+    me?.org_memberships?.some((o) => o.org_id === activeOrgId && o.is_primary_admin),
+  );
+  const visibleTabs = PAGE_TABS.filter((t) => t.id !== "roster" || isPrimaryAdmin);
   const busy =
     createStub.isPending ||
     updateStub.isPending ||
@@ -124,9 +137,9 @@ export function OrgAdminPage() {
   if (!isEnterprise) {
     return (
       <div className="mx-auto max-w-xl px-4 py-8">
-        <h1 className="text-lg font-semibold">企業公開目錄</h1>
+        <h1 className="text-lg font-semibold">企業後台</h1>
         <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-          此功能需要<strong className="font-medium">企業版</strong>方案。請在設定頁切換方案，或使用 dev 登入時選 enterprise + seed_org。
+          管理電子名片與成員需要<strong className="font-medium">企業版</strong>。請由公司管理員邀請你加入企業租戶。
         </p>
       </div>
     );
@@ -135,9 +148,9 @@ export function OrgAdminPage() {
   if (!activeOrgId || !orgs?.items.length) {
     return (
       <div className="mx-auto max-w-xl px-4 py-8">
-        <h1 className="text-lg font-semibold">企業公開目錄</h1>
+        <h1 className="text-lg font-semibold">電子名片</h1>
         <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-          尚未加入任何組織。Dev 環境請用 <code className="text-xs">seed_org: acme-demo</code> 登入。
+          尚未加入任何組織。請先在「我的」建立團隊，或接受邀請連結。
         </p>
       </div>
     );
@@ -182,10 +195,10 @@ export function OrgAdminPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col px-4 pb-5 pt-4">
       <div className="shrink-0">
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">企業公開目錄</h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">電子名片</h1>
         {activeOrg && (
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            {activeOrg.name} · 已發布 {activeOrg.published_stub_count} 筆
+            {activeOrg.name} · AI 可推薦 {activeOrg.published_stub_count} 張
           </p>
         )}
       </div>
@@ -201,7 +214,7 @@ export function OrgAdminPage() {
         >
           {orgs.items.map((o) => (
             <option key={o.id} value={o.id}>
-              {o.name}（已發布 {o.published_stub_count}）
+              {o.name}（AI 可推薦 {o.published_stub_count}）
             </option>
           ))}
         </select>
@@ -209,9 +222,9 @@ export function OrgAdminPage() {
 
       <nav
         className="mt-4 flex shrink-0 border-b border-[var(--color-border)]"
-        aria-label="公開目錄功能"
+        aria-label="電子名片功能"
       >
-        {PAGE_TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -232,6 +245,10 @@ export function OrgAdminPage() {
       </nav>
 
       <div className="mt-4 min-h-0 flex-1">
+        {pageTab === "roster" && activeOrgId && isPrimaryAdmin && (
+          <EnterpriseRosterPanel orgId={activeOrgId} />
+        )}
+
         {pageTab === "list" && (
           <ListPanel
             filter={listFilter}
@@ -379,7 +396,7 @@ function ListPanel({
           <p className="text-xs text-[var(--color-text-tertiary)]">載入中…</p>
         ) : stubs.length === 0 ? (
           <p className="text-xs text-[var(--color-text-tertiary)]">
-            {filter === "all" ? "尚無公開身份" : `沒有「${LIST_FILTERS.find((x) => x.id === filter)?.label}」項目`}
+            {filter === "all" ? "尚無電子名片" : `沒有「${LIST_FILTERS.find((x) => x.id === filter)?.label}」項目`}
           </p>
         ) : (
           <ul className="space-y-3">
@@ -389,10 +406,10 @@ function ListPanel({
                 <li key={stub.id} className="rounded-lg border border-[var(--color-border)] p-3">
                   {isEditing ? (
                     <div>
-                      <p className="text-sm font-medium text-[var(--color-text-primary)]">編輯公開身份</p>
+                      <p className="text-sm font-medium text-[var(--color-text-primary)]">編輯電子名片</p>
                       {editingStatus === "published" && (
                         <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
-                          已發布項目儲存後會自動更新搜尋索引。
+                          已允許 AI 推薦的名片儲存後會自動更新搜尋索引。
                         </p>
                       )}
                       <StubForm form={editForm} onChange={onEditFormChange} className="mt-3" />
@@ -430,7 +447,11 @@ function ListPanel({
                           <ActionBtn label="編輯" disabled={busy} onClick={() => onEdit(stub)} />
                           {stub.status === "draft" && (
                             <>
-                              <ActionBtn label="發布" disabled={busy} onClick={() => onPublish(stub.id)} />
+                              <ActionBtn
+                                label="允許 AI 推薦"
+                                disabled={busy}
+                                onClick={() => onPublish(stub.id)}
+                              />
                               <ActionBtn
                                 label="刪除"
                                 disabled={busy}
@@ -441,20 +462,40 @@ function ListPanel({
                           )}
                           {stub.status === "published" && (
                             <ActionBtn
-                              label="下架"
+                              label="關閉 AI 推薦"
                               disabled={busy}
                               variant="muted"
                               onClick={() => onUnpublish(stub.id)}
                             />
                           )}
                           {stub.status === "unpublished" && (
-                            <ActionBtn label="重新發布" disabled={busy} onClick={() => onPublish(stub.id)} />
+                            <ActionBtn
+                              label="再次允許推薦"
+                              disabled={busy}
+                              onClick={() => onPublish(stub.id)}
+                            />
                           )}
                         </div>
                       </div>
                       <p className="mt-2 truncate text-[10px] text-[var(--color-text-tertiary)]">
                         {stub.external_card_url}
                       </p>
+                      {stub.status === "published" && (
+                        <button
+                          type="button"
+                          className="mt-2 text-[11px] font-medium text-[var(--color-primary)]"
+                          onClick={() => {
+                            const path = stub.share_path ?? `/card/${stub.id}`;
+                            const url =
+                              typeof window !== "undefined"
+                                ? `${window.location.origin}${path}`
+                                : path;
+                            void navigator.clipboard?.writeText(url);
+                          }}
+                        >
+                          複製分享連結
+                        </button>
+                      )}
                     </>
                   )}
                 </li>
@@ -478,9 +519,19 @@ function StubForm({
 }) {
   return (
     <div className={cn("grid gap-2", className)}>
-      <Field label="姓名" value={form.display_name} onChange={(v) => onChange({ ...form, display_name: v })} />
-      <Field label="公司" value={form.company_name} onChange={(v) => onChange({ ...form, company_name: v })} />
+      <Field label="姓名（必填）" value={form.display_name} onChange={(v) => onChange({ ...form, display_name: v })} />
+      <Field label="公司（必填）" value={form.company_name} onChange={(v) => onChange({ ...form, company_name: v })} />
       <Field label="職稱" value={form.title} onChange={(v) => onChange({ ...form, title: v })} />
+      <Field
+        label="一句話介紹（選填）"
+        value={form.one_line_blurb}
+        onChange={(v) => onChange({ ...form, one_line_blurb: v })}
+      />
+      <Field
+        label="頭像 URL（選填）"
+        value={form.avatar_url}
+        onChange={(v) => onChange({ ...form, avatar_url: v })}
+      />
       <Field
         label="職責關鍵字（逗號分隔）"
         value={form.responsibility_keywords}
@@ -492,7 +543,7 @@ function StubForm({
         onChange={(v) => onChange({ ...form, product_keywords: v })}
       />
       <Field
-        label="外部名片 URL（必填）"
+        label="對外連結（必填）"
         value={form.external_card_url}
         onChange={(v) => onChange({ ...form, external_card_url: v })}
       />
@@ -531,7 +582,7 @@ function StatusBadge({ status }: { status: string }) {
         status === "unpublished" && "bg-gray-100 text-gray-600",
       )}
     >
-      {status === "published" ? "已發布" : status === "draft" ? "草稿" : "已下架"}
+      {status === "published" ? "AI 可推薦" : status === "draft" ? "草稿" : "已關閉推薦"}
     </span>
   );
 }

@@ -9,6 +9,12 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# Local DEBUG: allow any localhost / 127.0.0.1 port (Next may hop 3000→3003).
+_cors_origins = settings.cors_origin_list
+_cors_origin_regex = (
+    r"https?://(localhost|127\.0\.0\.1)(:\d+)?$" if settings.debug else None
+)
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
@@ -20,7 +26,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=_cors_origins,
+    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

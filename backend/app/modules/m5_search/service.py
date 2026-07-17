@@ -7,7 +7,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.entitlements import reset_live_augment_quota_if_needed, reset_search_cache_quota_if_needed
+from app.core.entitlements import (
+    can_use_public_recommend,
+    consume_public_recommend,
+    public_recommend_unlimited,
+    remaining_public_recommend,
+    reset_live_augment_quota_if_needed,
+    reset_search_cache_quota_if_needed,
+)
 from app.core.media_urls import public_media_url
 from app.ai.pipelines.search_intent import INTENT_PROMPT_VERSION, parse_intent
 from app.ai.pipelines.search_rerank import PROMPT_VERSION as RERANK_PROMPT_VERSION, rerank_contacts
@@ -30,7 +37,7 @@ from app.modules.m5_search.retrieval import (
     retrieve_public_candidates,
 )
 from app.modules.m5_search.hybrid import PoolRetrievalDebug, build_semantic_query
-from app.modules.m5_search.public_search import ALLOWED_SEARCH_SCOPES, can_use_network_scope
+from app.modules.m5_search.public_search import ALLOWED_SEARCH_SCOPES
 from app.modules.m5_search.sample_queries import pick_sample_queries
 from app.modules.m5_search.live_augment import should_suggest_live
 from app.modules.m5_search.validate import apply_confirmed_boost, validate_rerank_item
@@ -151,12 +158,18 @@ async def get_search_status(db: AsyncSession, user: User) -> SearchStatusRespons
     ent = user.entitlement
     await reset_search_cache_quota_if_needed(db, ent)
     await reset_live_augment_quota_if_needed(db, ent)
-    can_search = indexed > 0 or (can_use_network_scope(ent.plan_tier) and public_pool > 0)
+    can_public = can_use_public_recommend(ent)
+    remaining = remaining_public_recommend(ent)
+    unlimited = public_recommend_unlimited(ent)
+    can_search = indexed > 0 or (can_public and public_pool > 0)
     return SearchStatusResponse(
         indexed_count=indexed,
         can_search=can_search,
         sample_queries=await pick_sample_queries(db, user),
         public_pool_count=public_pool,
+        can_use_public_recommend=can_public,
+        public_recommend_remaining_lifetime=0 if unlimited else remaining,
+        public_recommend_unlimited=unlimited,
         quotas=SearchQuotasDTO(
             search_cache_remaining_today=max(0, ent.search_cache_daily_quota - ent.search_cache_used_today),
             live_augment_remaining_month=max(
@@ -229,13 +242,23 @@ async def execute_search(
     scope = (body.search_scope or "private").lower()
     if scope not in ALLOWED_SEARCH_SCOPES:
         raise HTTPException(status_code=400, detail="INVALID_SEARCH_SCOPE")
-    if scope != "private" and not can_use_network_scope(user.entitlement.plan_tier):
-        raise HTTPException(status_code=403, detail="SEARCH_SCOPE_NOT_ALLOWED")
 
     indexed = await count_indexed(db, user.id)
     public_pool = await count_public_published(db)
     include_private = scope in ("private", "all")
     include_public = scope in ("network", "all")
+
+    # M1 public-recommend gate (DDR-M1-01/02): empty pool → skip without consume;
+    # Free trial exhausted → degrade all→private or 403 network.
+    if include_public:
+        if not can_use_public_recommend(user.entitlement):
+            if scope == "network":
+                raise HTTPException(status_code=403, detail="PUBLIC_RECOMMEND_TRIAL_EXHAUSTED")
+            include_public = False
+        elif public_pool == 0:
+            include_public = False
+        else:
+            await consume_public_recommend(db, user.entitlement)
 
     if scope == "private" and indexed == 0:
         q = SearchQuery(

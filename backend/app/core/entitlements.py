@@ -172,3 +172,39 @@ async def consume_person_linkedin_quota(db: AsyncSession, ent: UserEntitlement) 
     ent.person_linkedin_used_this_month += 1
     await db.flush()
     return quota - ent.person_linkedin_used_this_month
+
+
+def public_recommend_unlimited(ent: UserEntitlement) -> bool:
+    return ent.plan_tier in ("pro", "enterprise")
+
+
+def can_use_public_recommend(ent: UserEntitlement) -> bool:
+    """Whether the user may run a public-pool retrieval (PRD v4 §4 / DDR-M1)."""
+    if public_recommend_unlimited(ent):
+        return True
+    if ent.plan_tier == "free":
+        return ent.public_recommend_used_lifetime < ent.public_recommend_lifetime_quota
+    return False
+
+
+def remaining_public_recommend(ent: UserEntitlement) -> int:
+    """Remaining lifetime public-recommend uses; -1 = unlimited."""
+    if public_recommend_unlimited(ent):
+        return -1
+    return max(0, ent.public_recommend_lifetime_quota - ent.public_recommend_used_lifetime)
+
+
+async def consume_public_recommend(db: AsyncSession, ent: UserEntitlement) -> int:
+    """Increment lifetime public-recommend usage when Free actually queries the pool.
+
+    Pro/Enterprise: no-op, returns -1.
+    Raises 403 if Free trial exhausted.
+    Never clears used on plan switch (apply_plan_preset must not touch these fields).
+    """
+    if public_recommend_unlimited(ent):
+        return -1
+    if ent.public_recommend_used_lifetime >= ent.public_recommend_lifetime_quota:
+        raise HTTPException(status_code=403, detail="PUBLIC_RECOMMEND_TRIAL_EXHAUSTED")
+    ent.public_recommend_used_lifetime += 1
+    await db.flush()
+    return remaining_public_recommend(ent)

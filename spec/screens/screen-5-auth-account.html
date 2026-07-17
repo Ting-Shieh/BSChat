@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 登入／註冊 · 我的（權限後）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --primary:#0F4C5C; --primary-hover:#0B3A47; --primary-muted:#E6F2F5;
+    --accent:#D97706; --bg:#FAFAF9; --surface:#fff; --border:#E7E5E4;
+    --tp:#1C1917; --ts:#57534E; --tt:#A8A29E;
+    --success:#059669; --error:#DC2626; --info:#0284C7;
+    --priv-bg:#F0FDF4; --priv-tx:#166534;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#57534E;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--tp);-webkit-font-smoothing:antialiased;padding:28px 14px 60px}
+  .en{font-family:'Outfit',system-ui,sans-serif}.mono{font-family:'JetBrains Mono',monospace}
+  .head{text-align:center;color:#fff;margin-bottom:24px}
+  .head .t{font-size:16px;font-weight:600;letter-spacing:.3px}
+  .head .s{font-size:12px;color:#D6D3D1;margin-top:3px;line-height:1.5}
+  .stage{max-width:1720px;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;justify-content:center;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .lbl{color:#fff;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+  .lbl .n{width:22px;height:22px;border-radius:6px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .cap{color:#E7E5E4;font-size:12px;max-width:390px;text-align:center;line-height:1.55}.cap b{color:#fff}
+  .phone{width:390px;height:720px;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.3);position:relative;display:flex;flex-direction:column}
+  .sb{height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:12px;font-weight:600;flex-shrink:0}
+  .body{flex:1;overflow-y:auto}
+  .body::-webkit-scrollbar{width:0}
+  .chip{font-size:10.5px;line-height:1;padding:5px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;flex:1}
+  .tabbar{height:56px;background:#fff;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+  .avatar{border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);background:var(--primary-muted)}
+  .btn{height:44px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;border:none;width:100%;display:flex;align-items:center;justify-content:center}
+  .btn-p{background:var(--primary);color:#fff}
+  .btn-o{background:#fff;color:var(--tp);border:1.5px solid var(--border)}
+  .btn-g{background:#fff;color:var(--tp);border:1.5px solid var(--border);gap:10px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12.5px;font-weight:500;margin-bottom:6px;color:var(--tp)}
+  .field input{
+    width:100%;height:44px;border-radius:8px;border:1px solid var(--border);
+    padding:0 12px;font-size:14px;background:#fff;color:var(--tp);outline:none;
+  }
+  .field .hint{font-size:11px;color:var(--tt);margin-top:5px}
+  .link{font-size:13px;color:var(--primary);font-weight:500;text-decoration:none}
+  .muted{font-size:13px;color:var(--ts)}
+  .divrow{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--tt);font-size:11px}
+  .divrow::before,.divrow::after{content:"";flex:1;height:1px;background:var(--border)}
+  .brand{text-align:center;padding:28px 24px 8px}
+  .brand .logo{font-family:'Outfit',sans-serif;font-weight:700;font-size:22px;color:var(--primary);letter-spacing:.2px}
+  .brand .tag{font-size:12.5px;color:var(--ts);margin-top:6px;line-height:1.45}
+  .card{margin:0 20px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 16px}
+  .sect{font-size:11px;color:var(--tt);font-weight:600;letter-spacing:.4px;margin:16px 16px 8px}
+  .bar{height:6px;border-radius:999px;background:#F5F5F4;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--primary)}
+  .seg{display:flex;background:#F5F5F4;border-radius:10px;padding:3px}
+  .seg div{flex:1;text-align:center;font-size:12.5px;padding:8px 0;border-radius:8px;color:var(--ts)}
+  .seg .on{background:#fff;color:var(--primary);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .err{font-size:12.5px;color:var(--error);margin:-4px 0 10px}
+  .ok{font-size:13px;color:var(--success);line-height:1.5;background:#ECFDF5;border-radius:10px;padding:12px}
+  . ban{font-size:11px;color:#FECACA;background:#450A0A;border-radius:8px;padding:8px 10px;margin:10px 20px 0;text-align:center}
+  .note{margin-top:8px;padding:10px 12px;border-radius:10px;background:#FEF3C7;color:#92400E;font-size:11.5px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="t">BSChat · 登入／註冊</div>
+  <div class="s">靜態原型 · Email＋密碼＋Google · 無 Dev／無方案下拉<br/>「我的」改版專檔 → <b>screen-6-my-account.html</b>（本檔末也附 D／E／F 複本）</div>
+</div>
+
+<div class="stage">
+
+  <!-- A Login -->
+  <div class="col">
+    <div class="lbl"><span class="n en">A</span> 登入</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div class="brand">
+          <div class="logo">BSChat</div>
+          <div class="tag">登入以繼續使用名片庫與 AI 搜尋</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="field">
+            <label for="l-email">Email</label>
+            <input id="l-email" type="email" placeholder="you@company.com" value="" />
+          </div>
+          <div class="field">
+            <label for="l-pass">密碼</label>
+            <input id="l-pass" type="password" placeholder="••••••••" />
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin:-4px 0 14px">
+            <a class="link" href="#forgot">忘記密碼？</a>
+          </div>
+          <button class="btn btn-p" type="button">登入</button>
+          <div class="divrow">或</div>
+          <button class="btn btn-g" type="button">
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.9 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.9 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.3 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.2-3.5 5.7-6.5 7.1l6.2 5.2C38.7 37.3 44 31.5 44 24c0-1.3-.1-2.5-.4-3.5z"/></svg>
+            使用 Google 繼續
+          </button>
+        </div>
+        <p class="muted" style="text-align:center;margin:18px 20px 24px">沒有帳號？ <a class="link" href="#register">註冊</a></p>
+        <div class="note" style="margin:0 20px 20px">靜態頁刻意<b>不放</b>：方案選擇、公司代號、Dev 一鍵登入。</div>
+      </div>
+    </div>
+    <div class="cap">主路徑＝Email＋密碼；Google 快捷；忘記密碼入口。</div>
+  </div>
+
+  <!-- B Register -->
+  <div class="col">
+    <div class="lbl"><span class="n en">B</span> 註冊 Free</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div class="brand">
+          <div class="logo">BSChat</div>
+          <div class="tag">建立 Free 帳號 · 不必等人邀請</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="field">
+            <label>顯示名稱（選填）</label>
+            <input type="text" placeholder="于先生" />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" placeholder="you@company.com" />
+          </div>
+          <div class="field">
+            <label>密碼</label>
+            <input type="password" placeholder="至少 8 個字元" />
+            <div class="hint">至少 8 個字元</div>
+          </div>
+          <div class="field">
+            <label>確認密碼</label>
+            <input type="password" placeholder="再輸入一次" />
+          </div>
+          <button class="btn btn-p" type="button">建立帳號</button>
+          <div class="divrow">或</div>
+          <button class="btn btn-g" type="button">使用 Google 繼續</button>
+        </div>
+        <p class="muted" style="text-align:center;margin:18px 20px 8px">已有帳號？ <a class="link" href="#login">登入</a></p>
+        <p style="font-size:11px;color:var(--tt);text-align:center;padding:0 28px 24px;line-height:1.5">註冊即同意服務條款。新帳號預設 Free，含公開推薦終身試用 2 次。</p>
+      </div>
+    </div>
+    <div class="cap">註冊＝進產品；<b>邀請不是門票</b>。預設 Free entitlement。</div>
+  </div>
+
+  <!-- C Forgot -->
+  <div class="col">
+    <div class="lbl"><span class="n en">C</span> 忘記密碼</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div class="brand">
+          <div class="logo">BSChat</div>
+          <div class="tag">重設密碼</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" placeholder="you@company.com" />
+          </div>
+          <button class="btn btn-p" type="button">寄送重設連結</button>
+          <div class="ok" style="margin-top:14px">若此 Email 已註冊，重設信件將寄出。請至信箱開啟連結。</div>
+        </div>
+        <p class="muted" style="text-align:center;margin:20px">← <a class="link" href="#login">回到登入</a></p>
+        <div class="card" style="margin-top:8px;opacity:.95">
+          <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ts)">重設密碼頁（信內連結）</div>
+          <div class="field">
+            <label>新密碼</label>
+            <input type="password" placeholder="至少 8 個字元" />
+          </div>
+          <div class="field">
+            <label>確認新密碼</label>
+            <input type="password" />
+          </div>
+          <button class="btn btn-p" type="button">儲存並登入</button>
+        </div>
+      </div>
+    </div>
+    <div class="cap">防枚舉：成功文案不洩漏帳號是否存在。</div>
+  </div>
+
+  <!-- D 我的 Free -->
+  <div class="col">
+    <div class="lbl"><span class="n en">D</span> 我的 · Free（改版）</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div style="padding:16px 16px 0;font-weight:600;font-size:20px">我的</div>
+        <div style="margin:14px 16px 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:13px">
+          <div class="avatar en" style="width:48px;height:48px;font-size:16px">Yu</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:16px">于先生</div>
+            <div class="mono" style="font-size:11.5px;color:var(--ts)">you@example.com</div>
+          </div>
+          <span class="chip" style="background:#F5F5F4;color:var(--ts);font-weight:600">Free</span>
+        </div>
+
+        <div class="sect">本期用量</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>對話搜尋</span><span class="mono" style="color:var(--ts)">12 / 30 日</span></div>
+          <div class="bar"><i style="width:40%"></i></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin:12px 0 5px"><span>即時上網查</span><span class="mono" style="color:var(--ts)">1 / 5 月</span></div>
+          <div class="bar"><i style="width:20%"></i></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <div style="background:var(--bg);border-radius:8px;padding:10px">
+              <div style="font-size:15px;font-weight:600">剩 1／2</div>
+              <div style="font-size:10px;color:var(--tt);margin-top:2px">公開推薦試用 · 終身</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px">
+              <div style="font-size:15px;font-weight:600">3</div>
+              <div style="font-size:10px;color:var(--tt);margin-top:2px">更新公司（剩）</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect">方案</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:600;font-size:14px">目前：Free</div>
+              <div style="font-size:11.5px;color:var(--ts);margin-top:3px;line-height:1.45">庫內搜尋＋Plan · 公開推薦終身 2 次</div>
+            </div>
+          </div>
+          <div class="note" style="margin-top:10px;margin-bottom:0">產品<b>不提供</b>一鍵切 Free／Pro／企業。升級請走下方申請。</div>
+        </div>
+
+        <div class="sect">搜尋偏好 · 精準度</div>
+        <div style="margin:0 16px">
+          <div class="seg"><div>精準</div><div class="on">平衡</div><div style="color:var(--tt)">探索 🔒</div></div>
+          <div style="font-size:11px;color:var(--tt);margin-top:6px;line-height:1.5">「探索」需 Pro —— <span style="color:var(--info)">申請升級</span></div>
+        </div>
+
+        <div class="sect">資料與隱私</div>
+        <div style="margin:0 16px;background:var(--priv-bg);border-radius:12px;padding:12px;font-size:12.5px;color:var(--priv-tx);line-height:1.55">🔒 私有收錄永不被外人搜到。團隊池僅同公司可見。公開推薦僅企業電子名片 opt-in。</div>
+
+        <div class="sect">團隊</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px">
+          <div style="font-size:13px;font-weight:500">尚未加入團隊</div>
+          <div style="font-size:11.5px;color:var(--ts);margin-top:4px;line-height:1.45">建立團隊後可邀請同事共享名片庫</div>
+          <button class="btn btn-o" style="height:40px;margin-top:10px;font-size:13px" type="button">建立團隊／邀請</button>
+        </div>
+
+        <div style="margin:16px 16px 8px;background:linear-gradient(90deg,var(--primary),#12657a);border-radius:14px;padding:15px;color:#fff">
+          <div style="font-weight:600;font-size:15px">需要更多公開推薦？</div>
+          <div style="font-size:12px;opacity:.85;margin-top:4px;line-height:1.5">升級 Pro：公開推薦無限 · LinkedIn 補充 · 資料自動更新</div>
+          <button class="btn en" style="background:#fff;color:var(--primary);margin-top:11px;height:40px" type="button">聯絡我們升級 Pro</button>
+        </div>
+        <div style="margin:0 16px 20px;background:#fff;border:1px dashed var(--border);border-radius:12px;padding:13px">
+          <div style="font-size:13px;font-weight:500">要被 AI 推薦給外人？</div>
+          <div style="font-size:11.5px;color:var(--ts);margin-top:4px;line-height:1.45">需企業版 Admin 開啟「允許 AI 推薦」</div>
+          <button class="btn btn-o" style="height:40px;margin-top:10px;font-size:13px" type="button">申請企業版</button>
+        </div>
+        <div style="text-align:center;padding-bottom:18px;font-size:13px;color:var(--tt)">登出</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--tt)">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px;box-shadow:0 4px 10px rgba(217,119,6,.35)">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">相對舊版：拿掉「試用 Pro／改回 Free」假切換；公開試用可見；企業申請分離。</div>
+  </div>
+
+  <!-- E 我的 Pro -->
+  <div class="col">
+    <div class="lbl"><span class="n en">E</span> 我的 · Pro</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div style="padding:16px 16px 0;font-weight:600;font-size:20px">我的</div>
+        <div style="margin:14px 16px 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:13px">
+          <div class="avatar en" style="width:48px;height:48px;font-size:16px">Ada</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:16px">Ada Chen</div>
+            <div class="mono" style="font-size:11.5px;color:var(--ts)">ada@acme.com</div>
+          </div>
+          <span class="chip" style="background:var(--primary-muted);color:var(--primary);font-weight:600">Pro</span>
+        </div>
+
+        <div class="sect">本期用量</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>對話搜尋</span><span class="mono" style="color:var(--ts)">8 / 50 日</span></div>
+          <div class="bar"><i style="width:16%"></i></div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);background:var(--bg);border-radius:8px;padding:10px">
+            <div style="font-size:15px;font-weight:600">無限</div>
+            <div style="font-size:10px;color:var(--tt);margin-top:2px">公開推薦 · 方案內</div>
+          </div>
+        </div>
+
+        <div class="sect">方案</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;font-size:12.5px;color:var(--ts);line-height:1.5">
+          目前 <b style="color:var(--tp)">Pro</b>：可搜公開推薦池。若要對外曝光電子名片，請申請企業版。
+          <button class="btn btn-o" style="height:40px;margin-top:10px;font-size:13px" type="button">申請企業版</button>
+        </div>
+
+        <div class="sect">資料更新（Pro）</div>
+        <div style="margin:0 16px 12px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;font-size:13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div><div>公司資料過期自動更新</div><div style="font-size:11px;color:var(--tt);margin-top:2px">背景定期重抓官網</div></div>
+            <div style="width:42px;height:24px;border-radius:999px;background:var(--primary);position:relative"><span style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:999px;background:#fff"></span></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div>LinkedIn 自動補充職責</div><div style="font-size:11px;color:var(--tt);margin-top:2px">有連結時背景整理</div></div>
+            <div style="width:42px;height:24px;border-radius:999px;background:var(--primary);position:relative"><span style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:999px;background:#fff"></span></div>
+          </div>
+        </div>
+
+        <div class="sect">團隊</div>
+        <div style="margin:0 16px 20px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;font-size:12.5px">
+          <div>Acme Demo · <span style="color:var(--ts)">成員</span></div>
+          <button class="btn btn-o" style="height:40px;margin-top:10px;font-size:13px" type="button">邀請同事</button>
+        </div>
+        <div style="text-align:center;padding-bottom:18px;font-size:13px;color:var(--tt)">登出</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--tt)">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">Pro 仍<b>不能</b>「允許 AI 推薦」；無「改回 Free」開發鈕。</div>
+  </div>
+
+  <!-- F 我的 Enterprise Admin -->
+  <div class="col">
+    <div class="lbl"><span class="n en">F</span> 我的 · 企業 Admin</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono" style="letter-spacing:1px">5G 100%</span></div>
+      <div class="body">
+        <div style="padding:16px 16px 0;font-weight:600;font-size:20px">我的</div>
+        <div style="margin:14px 16px 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:13px">
+          <div class="avatar en" style="width:48px;height:48px;font-size:16px">Bo</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:16px">Bob Admin</div>
+            <div class="mono" style="font-size:11.5px;color:var(--ts)">bob@acme.com</div>
+          </div>
+          <span class="chip" style="background:#FEF3C7;color:#B45309;font-weight:600">企業</span>
+        </div>
+
+        <div class="sect">方案與能力</div>
+        <div style="margin:0 16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;font-size:12.5px;line-height:1.5;color:var(--ts)">
+          <div><b style="color:var(--tp)">企業版</b> · 公開推薦消費無限</div>
+          <div style="margin-top:6px">你可以管理電子名片，並為員工開啟「允許 AI 推薦」。</div>
+        </div>
+
+        <div style="margin:14px 16px;background:#fff;border:1.5px solid var(--primary);border-radius:12px;padding:14px">
+          <div style="font-weight:600;font-size:14px;color:var(--primary)">電子名片管理</div>
+          <div style="font-size:12px;color:var(--ts);margin-top:4px;line-height:1.45">編輯公開欄位 · 允許 AI 推薦 · 分享連結／QR</div>
+          <button class="btn btn-p" style="height:40px;margin-top:12px;font-size:13px" type="button">前往管理 →</button>
+        </div>
+
+        <div class="sect">團隊</div>
+        <div style="margin:0 16px 20px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px;font-size:12.5px">
+          <div>Acme Demo · <b>Admin</b></div>
+          <button class="btn btn-o" style="height:40px;margin-top:10px;font-size:13px" type="button">邀請同事</button>
+        </div>
+        <div style="text-align:center;padding-bottom:18px;font-size:13px;color:var(--tt)">登出</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" style="color:var(--tt)">🔍<span>搜尋</span></div>
+        <div class="tab" style="color:var(--tt)">📇<span>名片庫</span></div>
+        <div class="tab" style="color:var(--tt)"><div style="width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-14px">＋</div><span style="margin-top:-2px">收錄</span></div>
+        <div class="tab" style="color:var(--tt)">✓<span>待確認</span></div>
+        <div class="tab" style="color:var(--primary);font-weight:600">👤<span>我的</span></div>
+      </div>
+    </div>
+    <div class="cap">企業升等仍人工；產品內只露出管理入口，不做測試切方案。</div>
+  </div>
+
+</div>
+</body>
+</html>

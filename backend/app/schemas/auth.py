@@ -10,6 +10,31 @@ class DevLoginRequest(BaseModel):
     seed_org: str | None = Field(default=None, examples=["acme-demo"], description="Dev: attach org + demo stubs")
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str | None = None
+    invite_token: str | None = None
+
+
+class PasswordLoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    sent: bool = True
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -20,6 +45,8 @@ class QuotaInfo(BaseModel):
     live_augment_remaining_month: int
     manual_refresh_remaining_month: int
     person_linkedin_remaining_month: int
+    public_recommend_remaining_lifetime: int = 0
+    public_recommend_unlimited: bool = False
 
 
 class PersonEnrichInfo(BaseModel):
@@ -41,6 +68,8 @@ class OrgMembershipInfo(BaseModel):
     org_id: UUID
     org_name: str
     role: str
+    is_enterprise: bool = False
+    is_primary_admin: bool = False
 
 
 class MeResponse(BaseModel):

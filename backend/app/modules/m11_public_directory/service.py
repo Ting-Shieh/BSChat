@@ -95,9 +95,13 @@ async def create_stub(
     responsibility_keywords: list[str],
     product_keywords: list[str],
     external_card_url: str,
+    one_line_blurb: str | None = None,
+    avatar_url: str | None = None,
 ) -> PublicBusinessStub:
     if not validate_external_url(external_card_url):
         raise HTTPException(status_code=400, detail="INVALID_EXTERNAL_URL")
+    if avatar_url and not validate_external_url(avatar_url):
+        raise HTTPException(status_code=400, detail="INVALID_AVATAR_URL")
 
     stub = PublicBusinessStub(
         org_id=org_id,
@@ -107,6 +111,8 @@ async def create_stub(
         responsibility_keywords=responsibility_keywords,
         product_keywords=product_keywords,
         external_card_url=external_card_url.strip(),
+        one_line_blurb=one_line_blurb.strip() if one_line_blurb else None,
+        avatar_url=avatar_url.strip() if avatar_url else None,
         status="draft",
         created_by_user_id=user_id,
     )
@@ -126,6 +132,8 @@ async def update_stub(
     responsibility_keywords: list[str] | None = None,
     product_keywords: list[str] | None = None,
     external_card_url: str | None = None,
+    one_line_blurb: str | None = None,
+    avatar_url: str | None = None,
 ) -> PublicBusinessStub:
     if display_name is not None:
         stub.display_name = display_name.strip()
@@ -141,6 +149,13 @@ async def update_stub(
         if not validate_external_url(external_card_url):
             raise HTTPException(status_code=400, detail="INVALID_EXTERNAL_URL")
         stub.external_card_url = external_card_url.strip()
+    if one_line_blurb is not None:
+        stub.one_line_blurb = one_line_blurb.strip() or None
+    if avatar_url is not None:
+        cleaned = avatar_url.strip()
+        if cleaned and not validate_external_url(cleaned):
+            raise HTTPException(status_code=400, detail="INVALID_AVATAR_URL")
+        stub.avatar_url = cleaned or None
 
     was_published = stub.status == "published"
     await db.commit()
@@ -235,6 +250,23 @@ async def import_csv(
     return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
+async def get_published_public_card(
+    db: AsyncSession, stub_id: uuid.UUID
+) -> tuple[PublicBusinessStub, Organization] | None:
+    result = await db.execute(
+        select(PublicBusinessStub, Organization)
+        .join(Organization, Organization.id == PublicBusinessStub.org_id)
+        .where(
+            PublicBusinessStub.id == stub_id,
+            PublicBusinessStub.status == "published",
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        return None
+    return row[0], row[1]
+
+
 async def ensure_org_membership(
     db: AsyncSession,
     user: User,
@@ -275,6 +307,7 @@ async def seed_demo_stubs(db: AsyncSession, org: Organization, user_id: uuid.UUI
             "responsibility_keywords": ["OEM", "通路"],
             "product_keywords": ["工業電腦", "嵌入式"],
             "external_card_url": "https://example.com/card/acme-wang",
+            "one_line_blurb": "幫製造商找對的通路夥伴",
         },
         {
             "display_name": "李美華",
@@ -283,6 +316,7 @@ async def seed_demo_stubs(db: AsyncSession, org: Organization, user_id: uuid.UUI
             "responsibility_keywords": ["技術支援", "PoC"],
             "product_keywords": ["邊緣運算", "IoT"],
             "external_card_url": "https://example.com/card/acme-lee",
+            "one_line_blurb": "邊緣運算 PoC 與技術對接",
         },
         {
             "display_name": "陳志遠",
@@ -291,6 +325,7 @@ async def seed_demo_stubs(db: AsyncSession, org: Organization, user_id: uuid.UUI
             "responsibility_keywords": ["產品規劃"],
             "product_keywords": ["自動化", "工控"],
             "external_card_url": "https://example.com/card/acme-chen",
+            "one_line_blurb": "工控自動化產品規劃",
         },
     ]
     for item in demos:

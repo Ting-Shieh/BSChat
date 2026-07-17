@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — Plan 模式搜尋原型</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --color-primary:#0F4C5C; --color-primary-hover:#0B3A47; --color-primary-muted:#E6F2F5;
+    --color-accent:#D97706; --color-accent-hover:#B45309; --color-accent-muted:#FEF3C7;
+    --color-bg:#FAFAF9; --color-surface:#FFFFFF; --color-border:#E7E5E4;
+    --color-text-primary:#1C1917; --color-text-secondary:#57534E; --color-text-tertiary:#A8A29E;
+    --color-success:#059669; --color-info:#0284C7;
+    --color-ai-bg:#EFF6FF; --color-ai-border:#BFDBFE; --color-ai-text:#1E40AF; --color-ai-badge:#DBEAFE;
+    --color-privacy-bg:#F0FDF4; --color-privacy-text:#166534;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#E7E5E4;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--color-text-primary);-webkit-font-smoothing:antialiased}
+  .num,.en{font-family:'Outfit',system-ui,sans-serif}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .phone{max-width:420px;margin:24px auto;background:var(--color-bg);min-height:calc(100vh - 48px);border-radius:28px;overflow:hidden;box-shadow:0 20px 60px rgba(28,25,23,.18);position:relative}
+  .scroll{height:720px;overflow-y:auto;padding-bottom:88px}
+  .scroll::-webkit-scrollbar{width:0}
+  .chip{font-size:11px;line-height:1;padding:5px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;flex:1;color:var(--color-text-tertiary)}
+  .tab.on{color:var(--color-primary);font-weight:600}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;opacity:.35;transition:opacity .25s}
+  .step.active,.step.done{opacity:1}
+  .step-icon{width:22px;height:22px;border-radius:999px;border:1.5px solid var(--color-border);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;background:#fff;margin-top:1px}
+  .step.active .step-icon{border-color:var(--color-info);color:var(--color-info);box-shadow:0 0 0 3px rgba(2,132,199,.12)}
+  .step.done .step-icon{border-color:var(--color-success);background:var(--color-success);color:#fff}
+  .step.skip .step-icon{border-color:var(--color-border);background:#F5F5F4;color:var(--color-text-tertiary)}
+  .step.skip{opacity:.7}
+  .pulse{animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  .spin{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .reveal{opacity:0;transform:translateY(8px);animation:rise .45s cubic-bezier(.4,0,.2,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .mode-btn{flex:1;padding:8px 6px;border-radius:10px;font-size:12px;border:1px solid var(--color-border);background:#fff;color:var(--color-text-secondary);cursor:pointer}
+  .mode-btn.on{border-color:var(--color-primary);background:var(--color-primary-muted);color:var(--color-primary);font-weight:600}
+  .replay{border:none;background:transparent;color:var(--color-info);font-size:12px;cursor:pointer;padding:4px 0}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="num" style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;font-weight:600">
+    <span>9:41</span>
+    <span style="letter-spacing:1px">●●●● &nbsp;5G &nbsp;100%</span>
+  </div>
+
+  <div style="padding:4px 18px 8px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div class="en" style="font-weight:700;font-size:20px;letter-spacing:-.3px;color:var(--color-primary)">BSChat</div>
+      <div style="font-size:12px;color:var(--color-text-tertiary);margin-top:1px">Plan 模式搜尋 · 原型</div>
+    </div>
+    <button class="replay" id="replay" type="button">重播 ▶</button>
+  </div>
+
+  <!-- scenario switcher -->
+  <div style="padding:0 18px 10px;display:flex;gap:8px">
+    <button type="button" class="mode-btn on" data-mode="pro" id="btn-pro">Pro｜含公開池</button>
+    <button type="button" class="mode-btn" data-mode="free" id="btn-free">Free｜試用剩餘 1／2</button>
+  </div>
+
+  <div style="margin:0 18px 8px;background:var(--color-privacy-bg);color:var(--color-privacy-text);font-size:11.5px;padding:7px 12px;border-radius:8px">
+    🔒 未公開名片不會被推薦 · 公開區僅摘要＋外鏈
+  </div>
+
+  <div class="scroll" id="scroll" style="padding-left:18px;padding-right:18px">
+
+    <!-- user bubble -->
+    <div style="display:flex;justify-content:flex-end;margin:10px 0 4px">
+      <div style="max-width:84%;background:var(--color-primary);color:#fff;padding:12px 14px;border-radius:16px 16px 4px 16px;font-size:14.5px;line-height:1.55">
+        我們要找能做<b>工業電腦邊緣 AI</b>合作的對象
+      </div>
+    </div>
+    <div class="num" style="text-align:right;font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px">剛剛</div>
+
+    <!-- PLAN PANEL -->
+    <div id="plan-panel" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:14px 15px;box-shadow:0 1px 2px rgba(28,25,23,.04)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:26px;height:26px;border-radius:8px;background:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff">✦</div>
+        <div>
+          <div style="font-weight:600;font-size:13.5px;color:var(--color-primary)">AI 計劃中</div>
+          <div class="num" id="plan-sub" style="font-size:11px;color:var(--color-text-tertiary)">固定五步 · 看得到在做什麼</div>
+        </div>
+      </div>
+
+      <div id="steps" style="margin-top:4px;border-top:1px solid var(--color-border);padding-top:4px">
+        <div class="step" data-step="1">
+          <div class="step-icon" data-icon>1</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">理解你的需求</div>
+            <div class="step-detail" style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;display:none">關鍵：工業電腦 × 邊緣 AI × 合作對口</div>
+          </div>
+        </div>
+        <div class="step" data-step="2">
+          <div class="step-icon" data-icon>2</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">在你的名片庫搜尋</div>
+            <div class="step-detail" style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;display:none">團隊池 47 張 · 檢索中</div>
+          </div>
+        </div>
+        <div class="step" data-step="3">
+          <div class="step-icon" data-icon>3</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">在公開可推薦池查找</div>
+            <div class="step-detail" style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;display:none"></div>
+          </div>
+        </div>
+        <div class="step" data-step="4">
+          <div class="step-icon" data-icon>4</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">比對誰最符合</div>
+            <div class="step-detail" style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;display:none">依公司產品 × 職責 × 沉睡時間排序</div>
+          </div>
+        </div>
+        <div class="step" data-step="5">
+          <div class="step-icon" data-icon>5</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:500">整理商機簡報</div>
+            <div class="step-detail" style="font-size:11.5px;color:var(--color-text-secondary);margin-top:2px;display:none">開場白 · 合作切入點 · 分區標示</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULTS (hidden until plan done) -->
+    <div id="results" style="display:none;margin-top:14px">
+
+      <div class="reveal" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:14px 15px;margin-bottom:14px">
+        <div style="font-weight:600;font-size:13px;color:var(--color-primary);margin-bottom:6px">✦ 商機簡報</div>
+        <div id="briefing-copy" style="font-size:14.5px;line-height:1.65"></div>
+      </div>
+
+      <!-- Section A -->
+      <div class="num" style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--color-text-tertiary);margin:4px 2px 8px">你的名片庫 · 團隊池</div>
+
+      <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <div style="display:flex;gap:10px">
+            <div class="en" style="width:42px;height:42px;border-radius:11px;background:var(--color-primary-muted);color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">ADL</div>
+            <div>
+              <div style="font-weight:600;font-size:16px">陳志偉</div>
+              <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">凌華科技 · 邊緣運算業務經理</div>
+            </div>
+          </div>
+          <div class="num" style="text-align:center"><div style="font-size:10px;color:var(--color-text-tertiary)">對得上</div><div style="font-weight:700;font-size:17px;color:var(--color-success)">92%</div></div>
+        </div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+          <span class="chip" style="background:#FEF3C7;color:#B45309">💤 沉睡 14 個月</span>
+          <span class="chip" style="background:#F5F5F4;color:var(--color-text-secondary)">👤 由 Alice 收錄</span>
+        </div>
+        <div class="ai-strip" style="margin-top:10px;background:var(--color-ai-bg);border-left:3px solid var(--color-ai-border);padding:8px 10px;border-radius:0 8px 8px 0;font-size:12.5px;color:var(--color-ai-text);line-height:1.5">
+          合作切入：對方在推邊緣推論模組，正好對你的方案。
+        </div>
+      </div>
+
+      <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <div style="display:flex;gap:10px">
+            <div class="en" style="width:42px;height:42px;border-radius:11px;background:#EDE9FE;color:#5B21B6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">NEX</div>
+            <div>
+              <div style="font-weight:600;font-size:16px">林佳穎</div>
+              <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">新漢 · 工業 AI 解決方案</div>
+            </div>
+          </div>
+          <div class="num" style="text-align:center"><div style="font-size:10px;color:var(--color-text-tertiary)">對得上</div><div style="font-weight:700;font-size:17px;color:var(--color-success)">86%</div></div>
+        </div>
+        <div style="margin-top:10px"><span class="chip" style="background:#F5F5F4;color:var(--color-text-secondary)">👤 由你收錄</span></div>
+      </div>
+
+      <!-- Section B -->
+      <div id="section-b">
+        <div class="num" style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--color-text-tertiary);margin:4px 2px 8px">AI 推薦 · 公開身份</div>
+        <div id="section-b-body"></div>
+      </div>
+
+      <div style="font-size:12px;color:var(--color-text-tertiary);text-align:center;padding:8px 0 16px;line-height:1.5">
+        其餘結果沒硬湊給你 · 公開區不含電話／Email
+      </div>
+    </div>
+  </div>
+
+  <!-- bottom nav -->
+  <div style="position:absolute;left:0;right:0;bottom:0;height:72px;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-top:1px solid var(--color-border);display:flex;align-items:flex-start;padding:10px 6px 0;gap:2px">
+    <div class="tab on"><span style="font-size:18px">🔍</span>搜尋</div>
+    <div class="tab"><span style="font-size:18px">📇</span>名片庫</div>
+    <div class="tab" style="margin-top:-14px"><div style="width:48px;height:48px;border-radius:999px;background:var(--color-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 6px 16px rgba(15,76,92,.35)">＋</div><span style="margin-top:2px">收錄</span></div>
+    <div class="tab"><span style="font-size:18px">✓</span>待確認</div>
+    <div class="tab"><span style="font-size:18px">👤</span>我的</div>
+  </div>
+</div>
+
+<script>
+  const STEPS = [1,2,3,4,5];
+  let mode = 'pro'; // pro | free
+  let timerIds = [];
+
+  function clearTimers(){ timerIds.forEach(clearTimeout); timerIds = []; }
+  function later(ms, fn){ const id = setTimeout(fn, ms); timerIds.push(id); }
+
+  function resetUI(){
+    clearTimers();
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('plan-sub').textContent = '固定五步 · 看得到在做什麼';
+    document.querySelectorAll('.step').forEach(el => {
+      el.classList.remove('active','done','skip');
+      el.querySelector('[data-icon]').innerHTML = el.dataset.step;
+      el.querySelector('[data-icon]').classList.remove('spin','pulse');
+      const d = el.querySelector('.step-detail');
+      d.style.display = 'none';
+      d.textContent = d.dataset.base || d.textContent;
+    });
+    // stash base texts once
+    document.querySelectorAll('.step-detail').forEach(d => {
+      if (!d.dataset.base && d.textContent) d.dataset.base = d.textContent;
+    });
+  }
+
+  function setStepActive(n){
+    const el = document.querySelector(`.step[data-step="${n}"]`);
+    el.classList.add('active');
+    const icon = el.querySelector('[data-icon]');
+    icon.innerHTML = '<span class="spin" style="display:inline-block">↻</span>';
+    const d = el.querySelector('.step-detail');
+    d.style.display = 'block';
+  }
+
+  function setStepDone(n, detail){
+    const el = document.querySelector(`.step[data-step="${n}"]`);
+    el.classList.remove('active');
+    el.classList.add('done');
+    el.querySelector('[data-icon]').textContent = '✓';
+    const d = el.querySelector('.step-detail');
+    if (detail) { d.textContent = detail; d.style.display = 'block'; }
+  }
+
+  function setStepSkip(n, detail){
+    const el = document.querySelector(`.step[data-step="${n}"]`);
+    el.classList.remove('active');
+    el.classList.add('skip','done');
+    el.querySelector('[data-icon]').textContent = '–';
+    const d = el.querySelector('.step-detail');
+    d.textContent = detail;
+    d.style.display = 'block';
+  }
+
+  function showResults(){
+    const briefing = document.getElementById('briefing-copy');
+    const sectionB = document.getElementById('section-b-body');
+    if (mode === 'pro') {
+      briefing.innerHTML = '翻了你的庫 <b class="num">47</b> 張，對上 <b style="color:var(--color-accent)">2 位</b>；公開可推薦池另找到 <b>1 位</b>企業公開身份。';
+      sectionB.innerHTML = `
+        <div style="background:linear-gradient(180deg,#fff,#F8FBFF);border:1px solid var(--color-ai-border);border-radius:16px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;gap:10px">
+            <div>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-weight:600;font-size:16px">黃思齊</span>
+                <span class="chip" style="background:var(--color-ai-badge);color:var(--color-ai-text)">公開商務 · 研華</span>
+              </div>
+              <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">邊緣 AI 產品經理 · 允許 AI 推薦</div>
+            </div>
+            <div class="num" style="text-align:center"><div style="font-size:10px;color:var(--color-text-tertiary)">推薦</div><div style="font-weight:700;font-size:17px;color:var(--color-info)">78%</div></div>
+          </div>
+          <div style="margin-top:10px;font-size:12.5px;color:var(--color-text-secondary);line-height:1.5">摘要：負責工業邊緣推論方案對外合作窗口。</div>
+          <button type="button" style="margin-top:10px;width:100%;border:1px solid var(--color-border);background:#fff;border-radius:10px;padding:9px;font-size:13px;font-weight:600;color:var(--color-primary);cursor:pointer">前往外部名片 →</button>
+        </div>`;
+    } else if (mode === 'free_exhausted') {
+      briefing.innerHTML = '翻了你的庫 <b class="num">47</b> 張，對上 <b style="color:var(--color-accent)">2 位</b>。公開推薦試用已用完，本次未查公開池。';
+      sectionB.innerHTML = `
+        <div style="background:#F5F5F4;border:1px solid var(--color-border);border-radius:16px;padding:14px;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">公開池已略過</div>
+          <div style="font-size:12.5px;color:var(--color-text-secondary);line-height:1.55">Free 帳號終身 2 次試用已用完（不會每月重置）。升級 Pro 可持續取得 AI 公開推薦。</div>
+          <button type="button" style="margin-top:10px;width:100%;border:none;background:var(--color-primary);color:#fff;border-radius:10px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">升級 Pro</button>
+        </div>`;
+    } else {
+      briefing.innerHTML = '翻了你的庫 <b class="num">47</b> 張，對上 <b style="color:var(--color-accent)">2 位</b>。本次為 Free 試用（剩餘將變 <b>1／2</b>），已查公開池。';
+      sectionB.innerHTML = `
+        <div style="background:#FFFBEB;border:1px dashed #F59E0B;border-radius:16px;padding:14px;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600;color:#B45309;margin-bottom:6px">試用額度說明</div>
+          <div style="font-size:12.5px;color:var(--color-text-secondary);line-height:1.55">帳號終身共 2 次公開推薦試用，用完需升 Pro。不會每月重置。</div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #FDE68A">
+            <div style="font-weight:600;font-size:15px">黃思齊 · 研華</div>
+            <div style="font-size:12px;color:var(--color-text-secondary);margin-top:3px">公開身份摘要（試用結果）</div>
+            <button type="button" style="margin-top:10px;width:100%;border:none;background:var(--color-primary);color:#fff;border-radius:10px;padding:9px;font-size:13px;font-weight:600;cursor:pointer">升級 Pro 解鎖公開推薦</button>
+          </div>
+        </div>`;
+    }
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('plan-sub').textContent = '計劃完成';
+    document.getElementById('scroll').scrollTop = 280;
+  }
+
+  function runPlan(){
+    resetUI();
+    const skipPublic = false; // free still runs step 3 for trial; use skip only when exhausted — demo free still has 1 left
+    // If we want exhausted free: mode === 'free_exhausted'
+
+    later(400, () => {
+      setStepActive(1);
+      later(900, () => {
+        setStepDone(1, '關鍵：工業電腦 × 邊緣 AI × 合作對口');
+        setStepActive(2);
+        later(1100, () => {
+          setStepDone(2, '團隊池 47 張 · 找到候選 5 位');
+          setStepActive(3);
+          later(1000, () => {
+            if (mode === 'free_exhausted') {
+              setStepSkip(3, '略過 · Free 試用已用完（終身 2 次）');
+            } else if (mode === 'free') {
+              setStepDone(3, '試用公開池 · 剩餘將變 1／2');
+            } else {
+              setStepDone(3, '公開可推薦池 · 找到候選 2 位');
+            }
+            setStepActive(4);
+            later(1000, () => {
+              setStepDone(4, '依公司產品 × 職責 × 沉睡時間排序');
+              setStepActive(5);
+              later(900, () => {
+                setStepDone(5, '開場白 · 合作切入點 · 分區標示');
+                showResults();
+              });
+            });
+          });
+        });
+      });
+    });
+  }
+
+  document.getElementById('btn-pro').onclick = () => {
+    mode = 'pro';
+    document.getElementById('btn-pro').classList.add('on');
+    document.getElementById('btn-free').classList.remove('on');
+    document.getElementById('btn-free').textContent = 'Free｜試用剩餘 1／2';
+    runPlan();
+  };
+  document.getElementById('btn-free').onclick = () => {
+    mode = 'free';
+    document.getElementById('btn-free').classList.add('on');
+    document.getElementById('btn-pro').classList.remove('on');
+    runPlan();
+  };
+  document.getElementById('replay').onclick = () => runPlan();
+
+  // long-press free to show exhausted? add third click cycle
+  let freeClicks = 0;
+  document.getElementById('btn-free').addEventListener('dblclick', () => {
+    mode = 'free_exhausted';
+    document.getElementById('btn-free').textContent = 'Free｜試用已用完';
+    document.getElementById('btn-free').classList.add('on');
+    document.getElementById('btn-pro').classList.remove('on');
+    runPlan();
+  });
+
+  runPlan();
+</script>
+
+<div style="max-width:420px;margin:0 auto 32px;padding:0 16px;font-size:12px;color:#78716C;line-height:1.55">
+  <b>對齊 wedge</b>：固定五步 Plan → 分區「你的庫／公開身份」→ Free 終身試用語意。<br/>
+  切換上方 Pro／Free 可重播；Free 按鈕<strong>雙擊</strong>可預覽「試用已用完 → 步驟 3 略過」。
+</div>
+</body>
+</html>

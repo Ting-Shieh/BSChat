@@ -9,6 +9,8 @@ from app.core.entitlements import (
     apply_plan_preset,
     manual_refresh_remaining,
     person_linkedin_remaining,
+    public_recommend_unlimited,
+    remaining_public_recommend,
     reset_live_augment_quota_if_needed,
     reset_manual_refresh_quota_if_needed,
     reset_person_linkedin_quota_if_needed,
@@ -33,6 +35,22 @@ router = APIRouter()
 ALLOWED_REFRESH_INTERVALS = {30, 60, 90}
 
 
+def _org_infos(memberships: list, user_id) -> list[OrgMembershipInfo]:
+    infos: list[OrgMembershipInfo] = []
+    for org, role in memberships:
+        is_ent = bool(getattr(org, "is_enterprise", False))
+        infos.append(
+            OrgMembershipInfo(
+                org_id=org.id,
+                org_name=org.name,
+                role=role,
+                is_enterprise=is_ent,
+                is_primary_admin=is_ent and org.primary_admin_user_id == user_id,
+            )
+        )
+    return infos
+
+
 def _build_me(user, entitlement: UserEntitlement, org_memberships: list[OrgMembershipInfo]) -> MeResponse:
     manual_remaining = manual_refresh_remaining(entitlement)
     if manual_remaining < 0:
@@ -40,6 +58,8 @@ def _build_me(user, entitlement: UserEntitlement, org_memberships: list[OrgMembe
     person_remaining = person_linkedin_remaining(entitlement)
     if person_remaining < 0:
         person_remaining = 999
+    unlimited = public_recommend_unlimited(entitlement)
+    public_remaining = remaining_public_recommend(entitlement)
 
     return MeResponse(
         id=user.id,
@@ -56,6 +76,8 @@ def _build_me(user, entitlement: UserEntitlement, org_memberships: list[OrgMembe
             ),
             manual_refresh_remaining_month=manual_remaining,
             person_linkedin_remaining_month=person_remaining,
+            public_recommend_remaining_lifetime=0 if unlimited else public_remaining,
+            public_recommend_unlimited=unlimited,
         ),
         person_enrich=PersonEnrichInfo(
             mode=entitlement.person_enrich_mode,
@@ -85,28 +107,26 @@ async def get_me(
     await reset_live_augment_quota_if_needed(db, entitlement)
     await db.flush()
     memberships = await list_user_org_memberships(db, user.id)
-    org_info = [
-        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
-        for org, role in memberships
-    ]
+    org_info = _org_infos(memberships, user.id)
     return _build_me(user, entitlement, org_info)
 
 
-@router.post("/plan", response_model=MeResponse, summary="Switch plan tier (dev/MVP, no billing)")
+@router.post("/plan", response_model=MeResponse, summary="Switch plan tier (dev only)")
 async def switch_plan(
     body: PlanSwitchRequest,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MeResponse:
-    """MVP plan switch without real billing — applies the tier quota preset."""
+    """Dev/test only — gated by ALLOW_DEV_LOGIN. Product UI must not call this."""
+    from app.core.config import get_settings
+
+    if not get_settings().allow_dev_login:
+        raise HTTPException(status_code=403, detail="DEV_LOGIN_DISABLED")
     apply_plan_preset(user.entitlement, body.plan_tier)
     await db.commit()
     await db.refresh(user.entitlement)
     memberships = await list_user_org_memberships(db, user.id)
-    org_info = [
-        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
-        for org, role in memberships
-    ]
+    org_info = _org_infos(memberships, user.id)
     return _build_me(user, user.entitlement, org_info)
 
 
@@ -143,8 +163,5 @@ async def update_settings(
     await db.commit()
     await db.refresh(ent)
     memberships = await list_user_org_memberships(db, user.id)
-    org_info = [
-        OrgMembershipInfo(org_id=org.id, org_name=org.name, role=role)
-        for org, role in memberships
-    ]
+    org_info = _org_infos(memberships, user.id)
     return _build_me(user, ent, org_info)

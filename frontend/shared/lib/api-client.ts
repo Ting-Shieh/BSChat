@@ -23,9 +23,9 @@ function handleUnauthorized() {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit & { token?: string; json?: boolean } = {},
+  options: RequestInit & { token?: string; json?: boolean; skipUnauthorizedHandler?: boolean } = {},
 ): Promise<T> {
-  const { token, headers, json = true, ...rest } = options;
+  const { token, headers, json = true, skipUnauthorizedHandler = false, ...rest } = options;
   const isFormData = rest.body instanceof FormData;
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
@@ -38,7 +38,7 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 401) {
+    if (res.status === 401 && !skipUnauthorizedHandler) {
       handleUnauthorized();
     }
     throw new ApiError(res.status, body || res.statusText);

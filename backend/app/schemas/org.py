@@ -28,6 +28,8 @@ class StubCreateRequest(BaseModel):
     responsibility_keywords: list[str] = Field(default_factory=list)
     product_keywords: list[str] = Field(default_factory=list)
     external_card_url: str
+    one_line_blurb: str | None = None
+    avatar_url: str | None = None
 
 
 class StubUpdateRequest(BaseModel):
@@ -37,6 +39,8 @@ class StubUpdateRequest(BaseModel):
     responsibility_keywords: list[str] | None = None
     product_keywords: list[str] | None = None
     external_card_url: str | None = None
+    one_line_blurb: str | None = None
+    avatar_url: str | None = None
 
 
 class StubResponse(BaseModel):
@@ -48,11 +52,27 @@ class StubResponse(BaseModel):
     responsibility_keywords: list[str]
     product_keywords: list[str]
     external_card_url: str
+    one_line_blurb: str | None = None
+    avatar_url: str | None = None
     status: str
     published_at: datetime | None
     unpublished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    share_path: str | None = None
+
+
+class PublicCardResponse(BaseModel):
+    id: UUID
+    display_name: str
+    company_name: str
+    title: str | None = None
+    one_line_blurb: str | None = None
+    avatar_url: str | None = None
+    responsibility_keywords: list[str] = Field(default_factory=list)
+    product_keywords: list[str] = Field(default_factory=list)
+    external_card_url: str
+    org_name: str
 
 
 class StubListResponse(BaseModel):

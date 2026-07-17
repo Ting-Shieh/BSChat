@@ -109,6 +109,9 @@ class SearchStatusResponse(BaseModel):
     sample_queries: list[str]
     quotas: SearchQuotasDTO
     public_pool_count: int = 0
+    can_use_public_recommend: bool = False
+    public_recommend_remaining_lifetime: int = 0
+    public_recommend_unlimited: bool = False
 
 
 class BriefingDTO(BaseModel):

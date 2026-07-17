@@ -74,13 +74,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/admin/org"
               className={cn(
-                "text-xs",
+                "rounded-lg border px-2.5 py-1.5 text-xs font-semibold",
                 pathname.startsWith("/admin/org")
-                  ? "font-semibold text-[var(--color-primary)]"
-                  : "text-[var(--color-text-secondary)]",
+                  ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white"
+                  : "border-[var(--color-primary)] text-[var(--color-primary)]",
               )}
             >
-              公開目錄
+              企業後台
             </Link>
           )}
         </header>

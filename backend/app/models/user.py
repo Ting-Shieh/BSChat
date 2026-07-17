@@ -14,6 +14,9 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     workspace: Mapped["Workspace"] = relationship(back_populates="owner", uselist=False)
@@ -59,6 +62,9 @@ class UserEntitlement(Base):
     person_linkedin_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     person_linkedin_auto_on_url: Mapped[bool] = mapped_column(Boolean, default=False)
     search_precision: Mapped[str] = mapped_column(String(20), default="balanced")
+    # PRD v4 §4 — Free public-recommend lifetime trial (no monthly reset)
+    public_recommend_lifetime_quota: Mapped[int] = mapped_column(Integer, default=2)
+    public_recommend_used_lifetime: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

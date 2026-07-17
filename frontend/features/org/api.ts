@@ -16,11 +16,14 @@ export interface PublicStub {
   responsibility_keywords: string[];
   product_keywords: string[];
   external_card_url: string;
+  one_line_blurb?: string | null;
+  avatar_url?: string | null;
   status: "draft" | "published" | "unpublished";
   published_at: string | null;
   unpublished_at: string | null;
   created_at: string;
   updated_at: string;
+  share_path?: string | null;
 }
 
 export interface StubPayload {
@@ -30,6 +33,25 @@ export interface StubPayload {
   responsibility_keywords?: string[];
   product_keywords?: string[];
   external_card_url: string;
+  one_line_blurb?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface PublicCard {
+  id: string;
+  display_name: string;
+  company_name: string;
+  title: string | null;
+  one_line_blurb: string | null;
+  avatar_url: string | null;
+  responsibility_keywords: string[];
+  product_keywords: string[];
+  external_card_url: string;
+  org_name: string;
+}
+
+export async function fetchPublicCard(stubId: string): Promise<PublicCard> {
+  return apiFetch(`/api/v1/public/cards/${stubId}`);
 }
 
 export async function fetchMyOrgs(token: string): Promise<{ items: OrgSummary[] }> {
