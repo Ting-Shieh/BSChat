@@ -1,5 +1,4 @@
 # BSChat frontend on Netlify (dogfood / production host).
-# Runtime: @netlify/next（自動偵測）
 # 必填 site env：NEXT_PUBLIC_API_URL
 
 [build]
@@ -8,6 +7,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Serwist service worker — avoid CDN caching a stale SW
 [[headers]]
