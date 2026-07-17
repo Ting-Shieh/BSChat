@@ -7,6 +7,7 @@ import { useMe } from "@/features/auth/hooks";
 import { useAuthHydrated } from "@/features/auth/useAuthHydrated";
 import { usePendingCount } from "@/features/capture/hooks";
 import { useAuthStore } from "@/features/auth/store";
+import { ApiError } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
 
 const tabs = [
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hydrated = useAuthHydrated();
   const token = useAuthStore((s) => s.token);
-  const { data: me, isError: meError } = useMe();
+  const { data: me, isError: meError, error: meQueryError } = useMe();
   const { data: pending } = usePendingCount();
   const logout = useAuthStore((s) => s.logout);
 
@@ -31,11 +32,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrated, token, router]);
 
   useEffect(() => {
-    if (meError) {
+    // Only force logout on real auth failure — not network / 5xx blips.
+    if (!meError) return;
+    if (meQueryError instanceof ApiError && meQueryError.status === 401) {
       logout();
       router.replace("/login");
     }
-  }, [meError, logout, router]);
+  }, [meError, meQueryError, logout, router]);
 
   if (!hydrated) {
     return (

@@ -36,6 +36,10 @@ export function useMe() {
     queryKey: ["me", token],
     queryFn: () => fetchMe(token!),
     enabled: !!token,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
+    // Network / 5xx should not look like "logged out"
+    refetchOnWindowFocus: true,
   });
 }
 

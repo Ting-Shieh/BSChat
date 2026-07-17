@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { googleStartUrl } from "../api";
 import { useAuthMode, usePasswordLogin } from "../hooks";
+import { useAuthHydrated } from "../useAuthHydrated";
+import { useAuthStore } from "../store";
 import { ApiError } from "@/shared/lib/api-client";
 
 const inputClass =
@@ -15,12 +17,25 @@ export function LoginForm() {
   const params = useSearchParams();
   const inviteToken = params.get("invite") || undefined;
   const inviteEnterprise = params.get("invite_enterprise") || undefined;
+  const hydrated = useAuthHydrated();
+  const token = useAuthStore((s) => s.token);
   const { data: mode } = useAuthMode();
   const login = usePasswordLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const showGoogle = Boolean(mode?.google_enabled);
+
+  useEffect(() => {
+    if (!hydrated || !token) return;
+    if (inviteEnterprise) {
+      router.replace(`/join/enterprise/${encodeURIComponent(inviteEnterprise)}`);
+    } else if (inviteToken) {
+      router.replace(`/join/${encodeURIComponent(inviteToken)}`);
+    } else {
+      router.replace("/contacts");
+    }
+  }, [hydrated, token, inviteEnterprise, inviteToken, router]);
 
   function afterAuth() {
     if (inviteEnterprise) {

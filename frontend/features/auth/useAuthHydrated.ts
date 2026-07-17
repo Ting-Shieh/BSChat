@@ -3,11 +3,15 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/features/auth/store";
 
+/** Wait until zustand persist has restored token from localStorage. */
 export function useAuthHydrated() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const finish = () => setHydrated(true);
+    let cancelled = false;
+    const finish = () => {
+      if (!cancelled) setHydrated(true);
+    };
 
     if (useAuthStore.persist.hasHydrated()) {
       finish();
@@ -15,12 +19,13 @@ export function useAuthHydrated() {
     }
 
     const unsub = useAuthStore.persist.onFinishHydration(finish);
-    void Promise.resolve(useAuthStore.persist.rehydrate()).then(finish).catch(finish);
+    void useAuthStore.persist.rehydrate().then(finish).catch(finish);
 
-    // 安全網：避免 persist 異常時永遠卡在「載入中」
-    const timer = setTimeout(finish, 1500);
+    // Last-resort only — do not race ahead of localStorage restore on slow devices.
+    const timer = setTimeout(finish, 5000);
 
     return () => {
+      cancelled = true;
       unsub();
       clearTimeout(timer);
     };
