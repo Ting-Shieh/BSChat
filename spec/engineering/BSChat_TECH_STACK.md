@@ -138,7 +138,7 @@ BSChat/
 | Client UI state | **Zustand** | M2 连拍 thumbnail / upload progress |
 | 图片压缩 | **browser-image-compression** | 上传前 max 2048px（M2 ENG） |
 | API | `fetch` + 生成类型 | `openapi-typescript` ← backend OpenAPI |
-| 部署 | **Vercel**（建议） | PWA + Next；**HTTPS 必须**（相机 API） |
+| 部署 | **Netlify** | PWA + Next（`@netlify/next`）；**HTTPS 必须**（相机 API） |
 
 ### 4.1 前端不做的事
 
@@ -346,7 +346,7 @@ MVP **不引入** LangChain；需要 orchestration 时再评估 LangGraph 或自
 |------|------|------|
 | PostgreSQL | **Neon** 或 Docker 本地 | contacts, search tsvector, pg_trgm；预留 pgvector |
 | Redis | **Upstash** 或 Docker 本地 | Celery broker |
-| Object storage | **Cloudflare R2** | 名片原图 |
+| Object storage | **Neon Object Storage**（S3 相容 · Beta）或 Cloudflare R2 | 名片原图 |
 | AI | **Anthropic API** | Claude Sonnet / Haiku |
 
 ### 7.1 本地开发
@@ -369,7 +369,14 @@ DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 JWT_SECRET=...
 ANTHROPIC_API_KEY=...
-R2_*=...
+R2_*=...   # optional if STORAGE_BACKEND=r2
+# Neon Object Storage:
+# STORAGE_BACKEND=neon
+# AWS_ENDPOINT_URL_S3=...
+# AWS_ACCESS_KEY_ID=...
+# AWS_SECRET_ACCESS_KEY=...
+# S3_BUCKET_NAME=bschat-cards
+# STORAGE_PUBLIC_BASE_URL=https://br-....neon.tech/bschat-cards
 ENABLE_SWAGGER=true
 CORS_ORIGINS=http://localhost:3000
 ```
@@ -398,14 +405,14 @@ NEXT_PUBLIC_API_URL=http://localhost:8001
 
 | 组件 | 建议平台 | 备注 |
 |------|----------|------|
-| frontend | Vercel | Next.js |
+| frontend | **Netlify** | Next.js（`netlify.toml` · base=`frontend`） |
 | backend API | Railway / Fly.io / Render | 常驻进程 |
 | Celery worker | 同上（第二 service） | 同镜像、不同 start command |
 | PostgreSQL | Neon / Railway | 需 pg_trgm 扩展 |
 | Redis | Upstash / Railway | |
-| R2 | Cloudflare | |
+| R2 / Neon Object Storage | Cloudflare / Neon | 名片图 |
 
-⚠️ **勿** 在 Vercel Serverless 跑 OCR/enrich worker。
+⚠️ **勿** 在 Netlify Functions／其他前端 Serverless 跑 OCR/enrich worker。
 
 ---
 

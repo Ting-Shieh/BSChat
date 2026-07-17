@@ -1,10 +1,16 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     app_name: str = "BSChat API"
     debug: bool = False
@@ -40,11 +46,33 @@ class Settings(BaseSettings):
 
     enable_swagger: bool = True
 
-    # Storage — local fallback when R2 not configured
-    storage_backend: str = "local"  # local | r2
+    # Storage — local | neon | s3 | r2
+    storage_backend: str = "local"
     local_upload_dir: str = "storage/uploads"
     api_base_url: str = "http://localhost:8001"
-    storage_public_base_url: str | None = None  # media CDN/origin; defaults to r2_public_url or api_base_url
+    storage_public_base_url: str | None = None  # media origin; defaults to r2_public_url or api_base_url
+
+    # Neon Object Storage / generic S3 (boto3). Neon Console → Credentials also emits AWS_* names.
+    s3_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3"),
+    )
+    s3_access_key_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
+    )
+    s3_secret_access_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
+    )
+    s3_bucket_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("S3_BUCKET_NAME", "NEON_STORAGE_BUCKET"),
+    )
+    s3_region: str = Field(
+        default="us-east-2",
+        validation_alias=AliasChoices("S3_REGION", "AWS_REGION"),
+    )
 
     r2_account_id: str | None = None
     r2_access_key_id: str | None = None

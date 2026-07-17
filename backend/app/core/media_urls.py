@@ -6,7 +6,7 @@ UPLOADS_PREFIX = "/uploads/"
 
 
 def media_public_base() -> str:
-    """Origin for BSChat-hosted uploads (local /uploads or R2 CDN). Config-only."""
+    """Origin for BSChat-hosted uploads (local /uploads, Neon public_read, or R2 CDN)."""
     settings = get_settings()
     base = settings.storage_public_base_url or settings.r2_public_url or settings.api_base_url
     return base.rstrip("/")
