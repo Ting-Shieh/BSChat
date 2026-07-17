@@ -1,13 +1,10 @@
 # BSChat frontend on Netlify (dogfood / production host).
-# Site settings: Base directory = frontend（此檔 [build].base 已設）
-# Runtime: @netlify/next（自動偵測，無需手動裝 adapter）
-# 必填 site env：NEXT_PUBLIC_API_URL（見 frontend/.env.dogfood.example）
-# 可選：NEXT_PUBLIC_MEDIA_BASE_URL
+# Runtime: @netlify/next（自動偵測）
+# 必填 site env：NEXT_PUBLIC_API_URL
 
 [build]
-  base = "frontend"
-  command = "npm run build"
-  publish = ".next"
+  command = "npm --prefix frontend run build"
+  publish = "frontend/.next"
 
 [build.environment]
   NODE_VERSION = "20"
