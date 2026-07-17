@@ -68,6 +68,9 @@ async def test_magic_link_dev_flow(client: AsyncClient, monkeypatch: pytest.Monk
     settings = get_settings()
     monkeypatch.setattr(settings, "allow_dev_login", True)
     monkeypatch.setattr(settings, "resend_api_key", None)
+    monkeypatch.setattr(settings, "smtp_host", None)
+    monkeypatch.setattr(settings, "smtp_username", None)
+    monkeypatch.setattr(settings, "smtp_password", None)
     monkeypatch.setattr(settings, "frontend_base_url", "http://localhost:3000")
 
     req = await client.post(

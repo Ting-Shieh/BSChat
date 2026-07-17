@@ -65,6 +65,9 @@ async def test_non_primary_cannot_invite(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(get_settings(), "resend_api_key", None)
+    monkeypatch.setattr(get_settings(), "smtp_host", None)
+    monkeypatch.setattr(get_settings(), "smtp_username", None)
+    monkeypatch.setattr(get_settings(), "smtp_password", None)
     admin_email = f"ent-a-{uuid.uuid4().hex[:8]}@example.com"
     member_email = f"ent-m-{uuid.uuid4().hex[:8]}@example.com"
     admin_token = await _dev_login(client, admin_email)

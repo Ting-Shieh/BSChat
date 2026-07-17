@@ -35,8 +35,16 @@ class Settings(BaseSettings):
     google_oauth_redirect_uri: str | None = None  # e.g. http://localhost:8001/api/v1/auth/google/callback
     auth_email_domain_allowlist: str = ""  # comma domains; empty = any
     magic_link_expire_minutes: int = 30
+    # Email: auto prefers SMTP when configured, else Resend.
+    email_provider: str = "auto"  # auto | smtp | resend
     resend_api_key: str | None = None
     resend_from_email: str | None = None
+    # Gmail SMTP (App Password). Host default smtp.gmail.com:587 STARTTLS.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None  # full Gmail address
+    smtp_password: str | None = None  # 16-char App Password
+    smtp_from_email: str | None = None  # e.g. BSChat <you@gmail.com>
 
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"

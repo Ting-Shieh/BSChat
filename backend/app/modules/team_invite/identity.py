@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
+from app.core.email import email_is_configured, send_email
 from app.core.entitlements import apply_plan_preset
 from app.models.magic_login import MagicLoginToken
 from app.models.user import User, UserEntitlement, Workspace
@@ -260,53 +261,28 @@ async def consume_password_reset_token(db: AsyncSession, raw_token: str) -> str:
 
 
 async def send_magic_email(*, to_email: str, verify_url: str) -> bool:
-    """Send via Resend when configured. Returns True if sent."""
+    """Send magic link when email provider configured. Returns True if sent."""
     settings = get_settings()
-    if not settings.resend_api_key:
-        return False
-    from_addr = settings.resend_from_email or "BSChat <onboarding@resend.dev>"
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": from_addr,
-                "to": [to_email],
-                "subject": "BSChat 登入連結",
-                "html": (
-                    f"<p>點擊下方連結登入 BSChat（{settings.magic_link_expire_minutes} 分鐘內有效）：</p>"
-                    f'<p><a href="{verify_url}">{verify_url}</a></p>'
-                ),
-            },
-        )
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="EMAIL_SEND_FAILED")
-    return True
+    return await send_email(
+        to_email=to_email,
+        subject="BSChat 登入連結",
+        html=(
+            f"<p>點擊下方連結登入 BSChat（{settings.magic_link_expire_minutes} 分鐘內有效）：</p>"
+            f'<p><a href="{verify_url}">{verify_url}</a></p>'
+        ),
+    )
 
 
 async def send_password_reset_email(*, to_email: str, reset_url: str) -> bool:
-    settings = get_settings()
-    if not settings.resend_api_key:
-        return False
-    from_addr = settings.resend_from_email or "BSChat <onboarding@resend.dev>"
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": from_addr,
-                "to": [to_email],
-                "subject": "BSChat 重設密碼",
-                "html": (
-                    "<p>點擊下方連結重設 BSChat 密碼（1 小時內有效）：</p>"
-                    f'<p><a href="{reset_url}">{reset_url}</a></p>'
-                    "<p>若你沒有申請重設，請忽略此信。</p>"
-                ),
-            },
-        )
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="EMAIL_SEND_FAILED")
-    return True
+    return await send_email(
+        to_email=to_email,
+        subject="BSChat 重設密碼",
+        html=(
+            "<p>點擊下方連結重設 BSChat 密碼（1 小時內有效）：</p>"
+            f'<p><a href="{reset_url}">{reset_url}</a></p>'
+            "<p>若你沒有申請重設，請忽略此信。</p>"
+        ),
+    )
 
 
 def frontend_auth_redirect(*, access_token: str, next_path: str = "/contacts") -> str:

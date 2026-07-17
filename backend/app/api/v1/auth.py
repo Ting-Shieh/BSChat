@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.auth import create_access_token
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.core.email import email_is_configured
 from app.core.entitlements import apply_plan_preset
 from app.core.passwords import hash_password, verify_password
 from app.models.user import User, UserEntitlement, Workspace
@@ -119,7 +120,7 @@ async def forgot_password(
         )
         await db.commit()
         sent = await idp.send_password_reset_email(to_email=email, reset_url=reset_url)
-        if not sent and not settings.allow_dev_login and not settings.resend_api_key:
+        if not sent and not settings.allow_dev_login and not email_is_configured():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="EMAIL_NOT_CONFIGURED"
             )
@@ -227,7 +228,7 @@ async def request_magic_link(
     await db.commit()
     sent = await idp.send_magic_email(to_email=str(body.email).lower(), verify_url=verify_url)
     debug_link = None if sent else (verify_url if settings.allow_dev_login else None)
-    if not sent and not settings.allow_dev_login and not settings.resend_api_key:
+    if not sent and not settings.allow_dev_login and not email_is_configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="EMAIL_NOT_CONFIGURED")
     return MagicLinkResponse(sent=sent, debug_link=debug_link)
 
@@ -257,7 +258,7 @@ async def auth_mode() -> dict[str, Any]:
         and settings.google_oauth_client_secret
         and settings.google_oauth_redirect_uri
     )
-    email_ready = bool(settings.resend_api_key) or settings.allow_dev_login
+    email_ready = email_is_configured() or settings.allow_dev_login
     return {
         "password_auth_enabled": True,
         "google_enabled": google_ready,

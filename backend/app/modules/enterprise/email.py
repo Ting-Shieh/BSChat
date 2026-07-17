@@ -1,14 +1,11 @@
-"""Enterprise invitation email rendering and Resend delivery."""
+"""Enterprise invitation email rendering and delivery."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from html import escape
 
-import httpx
-from fastapi import HTTPException, status
-
-from app.core.config import get_settings
+from app.core.email import send_email
 
 
 def render_enterprise_invite_email(
@@ -79,33 +76,11 @@ async def send_enterprise_invite_email(
     join_url: str,
     expires_at: datetime,
 ) -> bool:
-    """Send through Resend; return False when email is not configured."""
-    settings = get_settings()
-    if not settings.resend_api_key:
-        return False
-
+    """Send invite email; return False when no provider configured."""
     subject, html, text = render_enterprise_invite_email(
         org_name=org_name,
         inviter_name=inviter_name,
         join_url=join_url,
         expires_at=expires_at,
     )
-    from_addr = settings.resend_from_email or "BSChat <onboarding@resend.dev>"
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": from_addr,
-                "to": [to_email],
-                "subject": subject,
-                "html": html,
-                "text": text,
-            },
-        )
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="EMAIL_SEND_FAILED",
-        )
-    return True
+    return await send_email(to_email=to_email, subject=subject, html=html, text=text)
