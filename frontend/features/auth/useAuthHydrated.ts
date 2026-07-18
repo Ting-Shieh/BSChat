@@ -19,7 +19,7 @@ export function useAuthHydrated() {
     }
 
     const unsub = useAuthStore.persist.onFinishHydration(finish);
-    void useAuthStore.persist.rehydrate().then(finish).catch(finish);
+    void Promise.resolve(useAuthStore.persist.rehydrate()).then(finish).catch(finish);
 
     // Last-resort only — do not race ahead of localStorage restore on slow devices.
     const timer = setTimeout(finish, 5000);
