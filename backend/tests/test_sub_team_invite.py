@@ -30,9 +30,9 @@ async def _mk_user(db, email: str | None = None) -> User:
 @pytest.mark.asyncio
 async def test_owner_invite_creates_notification_and_pending():
     async with async_session_factory() as db:
-        owner = await _mk_user(db, "owner-invite@example.com")
-        peer = await _mk_user(db, "peer-invite@example.com")
-        outsider = await _mk_user(db, "outsider@example.com")
+        owner = await _mk_user(db, f"owner-invite-{uuid.uuid4().hex[:8]}@example.com")
+        peer = await _mk_user(db, f"peer-invite-{uuid.uuid4().hex[:8]}@example.com")
+        outsider = await _mk_user(db, f"outsider-{uuid.uuid4().hex[:8]}@example.com")
         org = Organization(
             name="EntInv",
             slug=f"ent-inv-{uuid.uuid4().hex[:8]}",
@@ -123,6 +123,57 @@ async def test_member_cannot_invite():
                 db, member, team_id=team.id, invited_email=peer.email
             )
         assert "NOT_OWNER" in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_revoke_deletes_invite_and_notification():
+    async with async_session_factory() as db:
+        owner = await _mk_user(db, f"owner-rev-{uuid.uuid4().hex[:8]}@example.com")
+        peer = await _mk_user(db, f"peer-rev-{uuid.uuid4().hex[:8]}@example.com")
+        org = Organization(
+            name="EntRev",
+            slug=f"ent-rev-{uuid.uuid4().hex[:8]}",
+            is_enterprise=True,
+            primary_admin_user_id=owner.id,
+        )
+        db.add(org)
+        await db.flush()
+        db.add(OrgMember(org_id=org.id, user_id=owner.id, role="admin"))
+        db.add(OrgMember(org_id=org.id, user_id=peer.id, role="member"))
+        team = SubTeam(org_id=org.id, name="隊", created_by_user_id=owner.id)
+        db.add(team)
+        await db.flush()
+        db.add(SubTeamMember(sub_team_id=team.id, user_id=owner.id, role="owner"))
+        await db.commit()
+
+        owner = (await db.execute(select(User).where(User.id == owner.id))).scalar_one()
+        peer = (await db.execute(select(User).where(User.id == peer.id))).scalar_one()
+        team = (await db.execute(select(SubTeam).where(SubTeam.id == team.id))).scalar_one()
+
+        invite, *_ = await sub_team_service.create_sub_team_invite(
+            db, owner, team_id=team.id, invited_email=peer.email
+        )
+        await db.commit()
+        invite_id = invite.id
+
+        listed = await sub_team_service.list_sub_team_invites(db, owner, team.id)
+        assert len(listed) == 1
+
+        await sub_team_service.revoke_sub_team_invite(db, owner, invite_id)
+        await db.commit()
+
+        gone = (
+            await db.execute(select(TeamInvite).where(TeamInvite.id == invite_id))
+        ).scalar_one_or_none()
+        assert gone is None
+        listed2 = await sub_team_service.list_sub_team_invites(db, owner, team.id)
+        assert listed2 == []
+        notifs = (
+            await db.execute(
+                select(UserNotification).where(UserNotification.user_id == peer.id)
+            )
+        ).scalars().all()
+        assert notifs == []
 
 
 @pytest.mark.asyncio

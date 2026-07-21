@@ -277,6 +277,7 @@ async def create_sub_team_invite(
 async def list_sub_team_invites(
     db: AsyncSession, user: User, team_id: uuid.UUID
 ) -> list[TeamInvite]:
+    """Owner view: only open (pending) invites — revoked/expired/accepted are not listed."""
     await _require_sub_team_owner(db, user.id, team_id)
     rows = (
         await db.execute(
@@ -284,26 +285,42 @@ async def list_sub_team_invites(
             .where(
                 TeamInvite.sub_team_id == team_id,
                 TeamInvite.invite_kind == "sub_team",
+                TeamInvite.revoked_at.is_(None),
+                TeamInvite.invited_email.is_not(None),
             )
             .order_by(TeamInvite.created_at.desc())
         )
     ).scalars().all()
-    return list(rows)
+    return [i for i in rows if invite_status(i) == "pending"]
 
 
 async def revoke_sub_team_invite(
     db: AsyncSession, user: User, invite_id: uuid.UUID
-) -> TeamInvite:
+) -> None:
+    """Hard-delete invite so it disappears from the owner list; dismiss related F1 notifs."""
+    from app.models.notification import UserNotification
+
     invite = (
         await db.execute(select(TeamInvite).where(TeamInvite.id == invite_id))
     ).scalar_one_or_none()
     if invite is None or invite.invite_kind != "sub_team" or invite.sub_team_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="INVITE_NOT_FOUND")
     await _require_sub_team_owner(db, user.id, invite.sub_team_id)
-    if invite.revoked_at is None:
-        invite.revoked_at = datetime.now(UTC)
-        await db.flush()
-    return invite
+
+    invite_id_str = str(invite.id)
+    notifs = (
+        await db.execute(
+            select(UserNotification).where(
+                UserNotification.kind == "sub_team_invite",
+                UserNotification.payload["invite_id"].as_string() == invite_id_str,
+            )
+        )
+    ).scalars().all()
+    for n in notifs:
+        await db.delete(n)
+
+    await db.delete(invite)
+    await db.flush()
 
 
 async def accept_sub_team_invite_by_id(

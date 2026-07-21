@@ -157,40 +157,41 @@ export default function SubTeamDetailPage() {
           </section>
 
           <p className="mb-2 text-[11px] font-semibold tracking-wide text-[var(--color-text-tertiary)]">
-            邀請狀態
+            待接受邀請
           </p>
           <div className="mb-4 space-y-2">
             {(invites ?? []).length === 0 ? (
-              <p className="text-[12.5px] text-[var(--color-text-secondary)]">尚無邀請紀錄</p>
+              <p className="text-[12.5px] text-[var(--color-text-secondary)]">尚無待接受邀請</p>
             ) : (
-              (invites ?? []).map((i) => (
-                <div
-                  key={i.invite_id}
-                  className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-[12.5px]">
-                      {i.invited_email ?? "（無 Email）"}
-                    </p>
-                    <p className="text-[10.5px] text-[var(--color-text-tertiary)]">
-                      {STATUS_LABEL[i.status]}
-                    </p>
+              (invites ?? []).map((i) => {
+                const email = (i.invited_email || "").trim() || "（無 Email）";
+                return (
+                  <div
+                    key={i.invite_id}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-mono text-[12.5px]">{email}</p>
+                      <p className="text-[10.5px] text-[var(--color-text-tertiary)]">
+                        {STATUS_LABEL[i.status] ?? "邀請中"}
+                      </p>
+                    </div>
+                    {i.status === "pending" && (
+                      <button
+                        type="button"
+                        className="text-[12px] text-[var(--color-text-tertiary)]"
+                        onClick={() => {
+                          if (window.confirm(`撤銷對 ${email} 的邀請？`)) {
+                            revoke.mutate(i.invite_id);
+                          }
+                        }}
+                      >
+                        撤銷
+                      </button>
+                    )}
                   </div>
-                  {i.status === "pending" && (
-                    <button
-                      type="button"
-                      className="text-[12px] text-[var(--color-text-tertiary)]"
-                      onClick={() => {
-                        if (window.confirm(`撤銷對 ${i.invited_email} 的邀請？`)) {
-                          revoke.mutate(i.invite_id);
-                        }
-                      }}
-                    >
-                      撤銷
-                    </button>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </>
