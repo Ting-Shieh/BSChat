@@ -30,20 +30,38 @@ type SettingsTab = "overview" | "teams" | "prefs";
 export function SettingsPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: me, isLoading } = useMe();
+  const { data: me, isLoading, isError, error, refetch } = useMe();
   const updateSettings = useUpdateSettings();
   const logout = useLogout();
-  const [error, setError] = useState<string | null>(null);
+  const [errorMsg, setError] = useState<string | null>(null);
 
   const initialTab = (params.get("tab") as SettingsTab | null) ?? "overview";
   const [tab, setTab] = useState<SettingsTab>(
     initialTab === "teams" || initialTab === "prefs" ? initialTab : "overview",
   );
 
-  if (isLoading || !me) {
+  if (isLoading) {
     return (
       <div className="flex min-h-full items-center justify-center py-16 text-sm text-[var(--color-text-secondary)]">
         載入中…
+      </div>
+    );
+  }
+
+  if (isError || !me) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          無法載入帳號資料
+          {error instanceof Error ? `（${error.message.slice(0, 120)}）` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+        >
+          重試
+        </button>
       </div>
     );
   }
@@ -296,7 +314,7 @@ export function SettingsPage() {
                   onChange={(v) => apply({ person_linkedin_auto_on_url: v })}
                 />
               </div>
-              {error && <p className="mt-3 text-xs text-[var(--color-accent-hover)]">{error}</p>}
+              {errorMsg && <p className="mt-3 text-xs text-[var(--color-accent-hover)]">{errorMsg}</p>}
             </section>
           )}
 

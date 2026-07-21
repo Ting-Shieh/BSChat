@@ -1,7 +1,4 @@
-import { redirect } from "next/navigation";
-
-export const dynamic = "force-dynamic";
-
+/** Root is redirected in next.config — keep a tiny fallback for non-Netlify runtimes. */
 export default function HomePage() {
-  redirect("/contacts");
+  return null;
 }

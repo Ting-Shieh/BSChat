@@ -19,7 +19,7 @@ const FILTERS: { id: ListFilter; label: string }[] = [
 ];
 
 export function ContactsPage() {
-  const { data, isLoading } = useContacts();
+  const { data, isLoading, isError, error, refetch } = useContacts();
   const [filter, setFilter] = useState<ListFilter>("all");
   const items = data?.items ?? [];
 
@@ -41,6 +41,24 @@ export function ContactsPage() {
 
   if (isLoading) {
     return <main className="p-4 text-sm text-[var(--color-text-secondary)]">載入中…</main>;
+  }
+
+  if (isError) {
+    return (
+      <main className="flex flex-col items-center gap-3 p-4 py-16 text-center">
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          無法載入名片庫
+          {error instanceof Error ? `（${error.message.slice(0, 120)}）` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+        >
+          重試
+        </button>
+      </main>
+    );
   }
 
   if (items.length === 0) {
