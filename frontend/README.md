@@ -22,7 +22,7 @@ npm run dev
 
 ## PWA
 
-- Serwist service worker：`app/sw.ts`
+- Serwist service worker：`sw.ts`（勿放 `app/`，會弄壞 `/search`／`/settings` SSR）
 - Manifest：`app/manifest.ts`
 - 開發模式 SW 預設停用（`next.config.ts`）
 
