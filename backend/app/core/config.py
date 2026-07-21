@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     r2_public_url: str | None = None
 
     anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
     ocr_model: str = "claude-sonnet-4-20250514"
 
     # OCR provider: mock | gemini | claude
@@ -104,13 +105,14 @@ class Settings(BaseSettings):
     enrich_model: str = "claude-sonnet-4-20250514"
     use_celery_workers: bool = False  # dev: in-process; prod: set true + run worker
 
-    # Search (M5)
+    # Search (M5) — provider: gemini | openai | claude | mock
     search_provider: str = "gemini"
     search_use_mock: bool = False
     import_use_mock: bool = False
     search_skip_intent_parse: bool = False
     gemini_search_model: str = "gemini-2.5-flash"
     gemini_import_model: str = "gemini-2.5-flash"
+    openai_search_model: str = "gpt-4o-mini"
     search_rerank_model: str = "claude-sonnet-4-20250514"
     search_result_limit: int = 10
     search_retrieval_limit: int = 50
@@ -147,6 +149,8 @@ class Settings(BaseSettings):
     def effective_search_provider(self) -> str:
         if self.search_provider != "mock":
             return self.search_provider
+        if self.openai_api_key:
+            return "openai"
         if self.gemini_api_key:
             return "gemini"
         if self.anthropic_api_key:
@@ -207,10 +211,21 @@ class Settings(BaseSettings):
 
     @property
     def search_will_use_llm(self) -> bool:
-        """Gemini/Claude for intent parse + rerank (off when SEARCH_USE_MOCK=true)."""
+        """OpenAI/Gemini/Claude for intent parse + rerank (off when SEARCH_USE_MOCK=true)."""
         if self.search_use_mock:
             return False
-        return bool(self.gemini_api_key) or bool(self.anthropic_api_key)
+        provider = self.effective_search_provider
+        if provider == "openai":
+            return bool(self.openai_api_key)
+        if provider == "gemini":
+            return bool(self.gemini_api_key)
+        if provider == "claude":
+            return bool(self.anthropic_api_key)
+        return (
+            bool(self.openai_api_key)
+            or bool(self.gemini_api_key)
+            or bool(self.anthropic_api_key)
+        )
 
     @property
     def import_will_use_llm(self) -> bool:

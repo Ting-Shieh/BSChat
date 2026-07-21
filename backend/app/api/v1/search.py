@@ -7,11 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import CurrentUser
 from app.core.db import get_db
 from app.modules.m5_search.live_augment import run_live_augment
-from app.modules.m5_search.service import execute_search, get_search_query, get_search_status
+from app.modules.m5_search.service import (
+    execute_search,
+    get_search_query,
+    get_search_session_detail,
+    get_search_status,
+    list_search_sessions,
+)
 from app.schemas.search import (
     CreateSearchQueryRequest,
     LiveAugmentRequest,
     SearchQueryResponse,
+    SearchSessionDetailResponse,
+    SearchSessionListResponse,
     SearchStatusResponse,
 )
 
@@ -24,6 +32,23 @@ async def search_status(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SearchStatusResponse:
     return await get_search_status(db, user)
+
+
+@router.get("/sessions", response_model=SearchSessionListResponse)
+async def search_sessions(
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SearchSessionListResponse:
+    return await list_search_sessions(db, user)
+
+
+@router.get("/sessions/{session_id}", response_model=SearchSessionDetailResponse)
+async def search_session_detail(
+    session_id: uuid.UUID,
+    user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SearchSessionDetailResponse:
+    return await get_search_session_detail(db, user, session_id)
 
 
 @router.post("/queries", response_model=SearchQueryResponse)

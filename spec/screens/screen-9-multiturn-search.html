@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 多輪搜尋＋對話紀錄（原型）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --color-primary:#0F4C5C; --color-primary-hover:#0B3A47; --color-primary-muted:#E6F2F5;
+    --color-bg:#FAFAF9; --color-surface:#FFFFFF; --color-border:#E7E5E4;
+    --color-text-primary:#1C1917; --color-text-secondary:#57534E; --color-text-tertiary:#A8A29E;
+    --color-success:#059669; --color-info:#0284C7;
+    --color-ai-bg:#EFF6FF; --color-ai-border:#BFDBFE; --color-ai-text:#1E40AF;
+    --color-privacy-bg:#F0FDF4; --color-privacy-text:#166534;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#E7E5E4;font-family:'Noto Sans TC','PingFang TC',sans-serif;color:var(--color-text-primary);-webkit-font-smoothing:antialiased}
+  .en{font-family:'Outfit',system-ui,sans-serif}
+  .phone{max-width:420px;margin:24px auto;background:var(--color-bg);min-height:calc(100vh - 48px);border-radius:28px;overflow:hidden;box-shadow:0 20px 60px rgba(28,25,23,.18);position:relative}
+  .scroll{height:640px;overflow-y:auto;padding:12px 16px 100px}
+  .scroll::-webkit-scrollbar{width:0}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;flex:1;color:var(--color-text-tertiary)}
+  .tab.on{color:var(--color-primary);font-weight:600}
+  .mode-btn{flex:1;padding:8px 6px;border-radius:10px;font-size:12px;border:1px solid var(--color-border);background:#fff;color:var(--color-text-secondary);cursor:pointer}
+  .mode-btn.on{border-color:var(--color-primary);background:var(--color-primary-muted);color:var(--color-primary);font-weight:600}
+  .bubble-user{max-width:84%;background:var(--color-primary);color:#fff;padding:11px 13px;border-radius:16px 16px 4px 16px;font-size:14px;line-height:1.55}
+  .bubble-ai{max-width:92%;background:var(--color-surface);border:1px solid var(--color-border);padding:12px 13px;border-radius:4px 16px 16px 16px;font-size:13.5px;line-height:1.55}
+  .card{border:1px solid var(--color-border);border-radius:12px;background:#fff;padding:10px 12px;margin-top:8px}
+  .chip{font-size:10px;padding:3px 7px;border-radius:999px;display:inline-flex;background:var(--color-primary-muted);color:var(--color-primary);font-weight:600}
+  .chip-pub{background:var(--color-ai-bg);color:var(--color-ai-text)}
+  .sheet{position:absolute;inset:0;background:rgba(28,25,23,.35);z-index:20;display:none;align-items:flex-end}
+  .sheet.on{display:flex}
+  .sheet-panel{width:100%;max-height:78%;background:#fff;border-radius:20px 20px 0 0;padding:14px 16px 28px;overflow-y:auto}
+  .hist-item{width:100%;text-align:left;padding:12px;border:1px solid var(--color-border);border-radius:12px;background:#fff;margin-top:8px;cursor:pointer}
+  .hist-item:hover{border-color:var(--color-primary)}
+  .hist-item.on{border-color:var(--color-primary);background:var(--color-primary-muted)}
+  .composer{position:absolute;left:0;right:0;bottom:52px;padding:8px 12px;background:linear-gradient(to top,var(--color-bg) 70%,transparent);z-index:10}
+  .nav{position:absolute;left:0;right:0;bottom:0;height:52px;background:#fff;border-top:1px solid var(--color-border);display:flex;align-items:center;padding:0 6px;z-index:11}
+  .view{display:none}
+  .view.on{display:block}
+  .note{font-size:11px;color:var(--color-text-tertiary);line-height:1.45}
+  .follow{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:6px 10px;border-radius:999px;border:1px solid var(--color-border);background:#fff;color:var(--color-text-secondary);cursor:pointer;margin:4px 4px 0 0}
+  .follow:hover{border-color:var(--color-primary);color:var(--color-primary)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="en" style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;font-weight:600">
+    <span>9:41</span>
+    <span style="letter-spacing:1px">●●●● &nbsp;5G &nbsp;100%</span>
+  </div>
+
+  <div style="padding:4px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+    <div>
+      <div class="en" style="font-weight:700;font-size:18px;letter-spacing:-.3px;color:var(--color-primary)">BSChat</div>
+      <div style="font-size:11.5px;color:var(--color-text-tertiary);margin-top:1px">多輪搜尋 · 對話紀錄原型</div>
+    </div>
+    <button type="button" id="btn-history" style="font-size:12px;font-weight:600;color:var(--color-primary);background:var(--color-primary-muted);border:none;border-radius:10px;padding:8px 10px;cursor:pointer">紀錄</button>
+  </div>
+
+  <div style="padding:0 16px 8px;display:flex;gap:8px">
+    <button type="button" class="mode-btn on" data-view="ideal">理想：多輪＋紀錄</button>
+    <button type="button" class="mode-btn" data-view="now">現況：單次覆蓋</button>
+  </div>
+
+  <!-- ========== IDEAL VIEW ========== -->
+  <div id="view-ideal" class="view on">
+    <div style="margin:0 16px 6px;background:var(--color-privacy-bg);color:var(--color-privacy-text);font-size:11px;padding:7px 11px;border-radius:8px">
+      同一串對話可追問；上方「紀錄」可回看上次問過什麼
+    </div>
+    <div class="scroll" id="scroll-ideal">
+      <!-- turn 1 -->
+      <div style="display:flex;justify-content:flex-end;margin:8px 0 4px">
+        <div class="bubble-user">公開商務有誰？</div>
+      </div>
+      <div style="font-size:10px;color:var(--color-text-tertiary);text-align:right;margin-bottom:8px">今天 10:42</div>
+
+      <div style="display:flex;justify-content:flex-start;margin:4px 0 12px">
+        <div class="bubble-ai">
+          <div style="font-size:11px;font-weight:600;color:var(--color-ai-text);margin-bottom:6px">這是「瀏覽公開池」</div>
+          目前公開推薦池有 <b>22</b> 位已曝光身份（企業 opt-in）。先列幾位給你看；可再追問收窄。
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;gap:8px">
+              <div>
+                <div style="font-weight:600;font-size:14px">Ting · 威剛智聯</div>
+                <div class="note" style="margin-top:2px">業務窗口 · 工業儲存／邊緣</div>
+              </div>
+              <span class="chip chip-pub">公開</span>
+            </div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;gap:8px">
+              <div>
+                <div style="font-weight:600;font-size:14px">王經理 · Acme</div>
+                <div class="note" style="margin-top:2px">工業電腦 · 系統整合</div>
+              </div>
+              <span class="chip chip-pub">公開</span>
+            </div>
+          </div>
+          <div class="note" style="margin-top:8px">還有 20 位未展開。你可以說「只要威剛」或「做 IoT 的」。</div>
+          <div style="margin-top:6px">
+            <button type="button" class="follow" data-fill="只要威剛的">只要威剛的</button>
+            <button type="button" class="follow" data-fill="誰做工業電腦">誰做工業電腦</button>
+            <button type="button" class="follow" data-fill="列更多">列更多</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- turn 2 -->
+      <div style="display:flex;justify-content:flex-end;margin:10px 0 4px">
+        <div class="bubble-user">只要威剛的</div>
+      </div>
+      <div style="font-size:10px;color:var(--color-text-tertiary);text-align:right;margin-bottom:8px">今天 10:43 · 延續上一問</div>
+
+      <div style="display:flex;justify-content:flex-start;margin:4px 0 12px">
+        <div class="bubble-ai">
+          <div style="font-size:11px;font-weight:600;color:var(--color-primary);margin-bottom:6px">已套用條件：公司含「威剛」</div>
+          在公開池裡對上 <b>1</b> 位：
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;gap:8px">
+              <div>
+                <div style="font-weight:600;font-size:14px">Ting · 威剛智聯</div>
+                <div class="note" style="margin-top:2px">理由：公司名匹配 · 已曝光公開身份</div>
+              </div>
+              <span class="chip chip-pub">公開</span>
+            </div>
+            <button type="button" style="margin-top:8px;width:100%;border:none;background:var(--color-primary);color:#fff;border-radius:10px;padding:8px;font-size:13px;font-weight:600;cursor:pointer">開啟名片連結</button>
+          </div>
+          <div class="note" style="margin-top:8px">這串對話會留在「紀錄」裡，下次還看得到你問過「公開商務有誰」。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== NOW VIEW ========== -->
+  <div id="view-now" class="view">
+    <div style="margin:0 16px 6px;background:#FEF3C7;color:#92400E;font-size:11px;padding:7px 11px;border-radius:8px">
+      現況：新搜尋會蓋掉上一問，畫面上通常只剩「最後一句」
+    </div>
+    <div class="scroll">
+      <div style="padding:8px 0 4px">
+        <div class="en" style="font-size:16px;font-weight:700">AI 搜尋</div>
+        <div class="note">22 位可搜尋 · 公開商務 22 位 · …</div>
+      </div>
+
+      <div style="margin:10px 0;padding:12px;border:1px solid var(--color-border);border-radius:14px;background:#fff">
+        <div class="note" style="margin-bottom:6px">輸入框（送出後只留下這一句）</div>
+        <div style="font-size:14px;font-weight:500">公開商務有誰？</div>
+      </div>
+
+      <div style="padding:10px;border:1px dashed var(--color-border);border-radius:12px;background:#fff;margin-bottom:10px">
+        <div class="note">Plan 五步動畫… → 結果區</div>
+        <div style="margin-top:8px;font-size:13px;color:var(--color-text-secondary)">空結果／找不到匹配</div>
+        <div class="note" style="margin-top:6px">上一句「工業電腦」已經看不到了。</div>
+      </div>
+
+      <div style="font-size:12px;line-height:1.55;color:var(--color-text-secondary);background:#fff;border:1px solid var(--color-border);border-radius:12px;padding:12px">
+        <b>痛點對照</b><br/>
+        · 沒有對話串：無法回看「我上次問什麼」<br/>
+        · 無法追問「只要威剛」延續上下文<br/>
+        · 「公開商務有誰」被當一般關鍵字搜，容易空
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div style="display:flex;gap:8px;align-items:flex-end;background:#fff;border:1px solid var(--color-border);border-radius:16px;padding:8px 10px">
+      <input id="composer" type="text" placeholder="追問或開新搜尋…" style="flex:1;border:none;outline:none;font-size:14px;background:transparent;padding:6px 4px" />
+      <button type="button" id="btn-send" style="border:none;background:var(--color-primary);color:#fff;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer">送出</button>
+    </div>
+    <div class="note" style="margin-top:4px;padding-left:4px">原型示意：送出不會真的打 API</div>
+  </div>
+
+  <div class="nav">
+    <div class="tab on"><span>◎</span>搜尋</div>
+    <div class="tab"><span>○</span>名片庫</div>
+    <div class="tab"><span>＋</span>收錄</div>
+    <div class="tab"><span>○</span>待確認</div>
+    <div class="tab"><span>○</span>我的</div>
+  </div>
+
+  <!-- History sheet -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;font-size:16px">對話紀錄</div>
+          <div class="note">每串＝一次搜尋主題；可點開回看</div>
+        </div>
+        <button type="button" id="btn-close-sheet" style="border:none;background:#F5F5F4;border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px">×</button>
+      </div>
+      <button type="button" class="hist-item on">
+        <div style="font-size:13.5px;font-weight:600">公開商務有誰？</div>
+        <div class="note" style="margin-top:3px">今天 10:42 · 2 則往來 · 含「只要威剛的」</div>
+      </button>
+      <button type="button" class="hist-item">
+        <div style="font-size:13.5px;font-weight:600">工業電腦邊緣 AI 合作對象</div>
+        <div class="note" style="margin-top:3px">昨天 16:08 · 1 則 · 庫內 3 / 公開 1</div>
+      </button>
+      <button type="button" class="hist-item">
+        <div style="font-size:13.5px;font-weight:600">有沒有做散熱模組的？</div>
+        <div class="note" style="margin-top:3px">7/18 · 1 則 · 空結果</div>
+      </button>
+      <div class="note" style="margin-top:14px;padding:0 4px">
+        與 ChatGPT 差異：這裡仍是「找人／商機」對話，不是什麼都能聊；但會記住你問過的每一串。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="max-width:420px;margin:0 auto 40px;padding:0 16px;font-size:12.5px;line-height:1.6;color:#57534E">
+  <b style="color:#1C1917">多輪搜尋會是怎樣</b><br/>
+  1. 你問「公開商務有誰」→ AI 辨成「瀏覽公開池」→ 列已曝光的人（不是空關鍵字）<br/>
+  2. 你再說「只要威剛」→ <b>延續同一串</b>，套用條件，不必重打整句<br/>
+  3. 「紀錄」打開過去每一串標題＝你當時的第一句／主題，解決「不知道上次問什麼」<br/><br/>
+  檔案：<code>spec/screens/screen-9-multiturn-search.html</code>（瀏覽器直接開）
+</div>
+
+<script>
+  const views = {
+    ideal: document.getElementById('view-ideal'),
+    now: document.getElementById('view-now'),
+  };
+  document.querySelectorAll('[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-view]').forEach((b) => b.classList.remove('on'));
+      btn.classList.add('on');
+      Object.values(views).forEach((v) => v.classList.remove('on'));
+      views[btn.dataset.view].classList.add('on');
+    });
+  });
+
+  const sheet = document.getElementById('sheet');
+  document.getElementById('btn-history').addEventListener('click', () => sheet.classList.add('on'));
+  document.getElementById('btn-close-sheet').addEventListener('click', () => sheet.classList.remove('on'));
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.classList.remove('on'); });
+
+  const composer = document.getElementById('composer');
+  document.querySelectorAll('[data-fill]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      composer.value = btn.dataset.fill;
+      composer.focus();
+    });
+  });
+  document.getElementById('btn-send').addEventListener('click', () => {
+    if (!composer.value.trim()) return;
+    alert('原型示意：正式版會把這句接到同一串對話，並保留在紀錄裡。\n\n你輸入：' + composer.value.trim());
+    composer.value = '';
+  });
+</script>
+</body>
+</html>

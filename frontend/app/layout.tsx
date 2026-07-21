@@ -17,10 +17,19 @@ export const metadata: Metadata = {
   title: "BSChat",
   description: "AI 驅動名片管理與 B2B 商脈平台",
   applicationName: "BSChat",
+  // app/icon.png + app/apple-icon.png (+ public/apple-touch-icon.png) supply icons.
+  // Keep an explicit root apple-touch-icon for Safari "Add to Home Screen".
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "BSChat",
+  },
+  other: {
+    // iOS still honors the apple-prefixed meta in some versions.
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 

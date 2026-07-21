@@ -12,7 +12,7 @@ export function PrivacyStrip({ className }: PrivacyStripProps) {
         className,
       )}
     >
-      僅團隊內可見 · 不對外公開搜尋 · 不存取他人私人資料
+      僅子團隊可見 · 不對外公開搜尋 · 不存取他人私人資料
     </p>
   );
 }

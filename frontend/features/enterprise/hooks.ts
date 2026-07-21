@@ -5,6 +5,8 @@ import { useAuthStore } from "@/features/auth/store";
 import {
   acceptEnterpriseInvite,
   createEnterpriseInvite,
+  createEnterpriseInviteBatch,
+  fetchMyPublicIdentities,
   listEnterpriseInvites,
   listEnterpriseMembers,
   listMyEnterpriseApplications,
@@ -12,6 +14,7 @@ import {
   revokeEnterpriseInvite,
   submitEnterpriseApplication,
   transferEnterpriseAdmin,
+  updateMyPublicIdentity,
 } from "./api";
 
 export function useMyEnterpriseApplications() {
@@ -72,6 +75,43 @@ export function useCreateEnterpriseInvite(orgId: string) {
     mutationFn: (body: { email: string; expires_days?: number }) =>
       createEnterpriseInvite(token!, orgId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+  });
+}
+
+export function useCreateEnterpriseInviteBatch(orgId: string) {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { emails: string[]; expires_days?: number }) =>
+      createEnterpriseInviteBatch(token!, orgId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+  });
+}
+
+export function useMyPublicIdentities() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["my-public-identity", token],
+    queryFn: () => fetchMyPublicIdentities(token!),
+    enabled: !!token,
+  });
+}
+
+export function useUpdateMyPublicIdentity() {
+  const token = useAuthStore((s) => s.token);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      body,
+    }: {
+      orgId: string;
+      body: { external_card_url: string; title?: string | null; display_name?: string | null };
+    }) => updateMyPublicIdentity(token!, orgId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-public-identity"] });
+      qc.invalidateQueries({ queryKey: ["org-stubs"] });
+    },
   });
 }
 

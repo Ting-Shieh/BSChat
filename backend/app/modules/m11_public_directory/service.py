@@ -84,6 +84,133 @@ async def get_stub(db: AsyncSession, org_id: uuid.UUID, stub_id: uuid.UUID) -> P
     return result.scalar_one_or_none()
 
 
+async def _require_org_member(
+    db: AsyncSession, org_id: uuid.UUID, user_id: uuid.UUID
+) -> None:
+    row = await db.execute(
+        select(OrgMember).where(OrgMember.org_id == org_id, OrgMember.user_id == user_id)
+    )
+    if row.scalar_one_or_none() is None:
+        raise HTTPException(status_code=400, detail="OWNER_NOT_ORG_MEMBER")
+
+
+async def get_stub_for_owner(
+    db: AsyncSession, org_id: uuid.UUID, owner_user_id: uuid.UUID
+) -> PublicBusinessStub | None:
+    result = await db.execute(
+        select(PublicBusinessStub).where(
+            PublicBusinessStub.org_id == org_id,
+            PublicBusinessStub.owner_user_id == owner_user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def ensure_member_public_identity(
+    db: AsyncSession,
+    *,
+    org: Organization,
+    user: User,
+    created_by_user_id: uuid.UUID | None = None,
+) -> PublicBusinessStub:
+    """Enterprise default: identity exists, want AI on, pending until external URL set."""
+    existing = await get_stub_for_owner(db, org.id, user.id)
+    if existing is not None:
+        return existing
+
+    stub = PublicBusinessStub(
+        org_id=org.id,
+        display_name=(user.display_name or user.email).strip(),
+        company_name=org.name,
+        title=None,
+        responsibility_keywords=[],
+        product_keywords=[],
+        external_card_url=None,
+        status="draft",
+        want_ai_recommend=True,
+        created_by_user_id=created_by_user_id or user.id,
+        owner_user_id=user.id,
+    )
+    db.add(stub)
+    await db.flush()
+    return stub
+
+
+def stub_ai_state(stub: PublicBusinessStub | None) -> str:
+    if stub is None:
+        return "none"
+    if stub.status == "published":
+        return "on"
+    if stub.want_ai_recommend and not (stub.external_card_url or "").strip():
+        return "pending_url"
+    return "off"
+
+
+async def list_my_public_identities(db: AsyncSession, user: User) -> list[dict]:
+    result = await db.execute(
+        select(Organization, OrgMember, PublicBusinessStub)
+        .join(OrgMember, OrgMember.org_id == Organization.id)
+        .outerjoin(
+            PublicBusinessStub,
+            (PublicBusinessStub.org_id == Organization.id)
+            & (PublicBusinessStub.owner_user_id == user.id),
+        )
+        .where(OrgMember.user_id == user.id, Organization.is_enterprise.is_(True))
+        .order_by(Organization.name)
+    )
+    items: list[dict] = []
+    for org, _member, stub in result.all():
+        items.append(
+            {
+                "org_id": org.id,
+                "org_name": org.name,
+                "stub_id": stub.id if stub else None,
+                "display_name": stub.display_name if stub else (user.display_name or user.email),
+                "title": stub.title if stub else None,
+                "external_card_url": stub.external_card_url if stub else None,
+                "status": stub.status if stub else None,
+                "want_ai_recommend": bool(stub.want_ai_recommend) if stub else True,
+                "ai_state": stub_ai_state(stub),
+            }
+        )
+    return items
+
+
+async def update_my_public_identity(
+    db: AsyncSession,
+    user: User,
+    org_id: uuid.UUID,
+    *,
+    external_card_url: str,
+    title: str | None = None,
+    display_name: str | None = None,
+) -> PublicBusinessStub:
+    org_result = await db.execute(
+        select(Organization, OrgMember)
+        .join(OrgMember, OrgMember.org_id == Organization.id)
+        .where(
+            Organization.id == org_id,
+            Organization.is_enterprise.is_(True),
+            OrgMember.user_id == user.id,
+        )
+    )
+    row = org_result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=403, detail="NOT_ORG_MEMBER")
+    org, _member = row
+
+    stub = await ensure_member_public_identity(db, org=org, user=user, created_by_user_id=user.id)
+    return await update_stub(
+        db,
+        stub,
+        display_name=display_name,
+        title=title,
+        external_card_url=external_card_url,
+        want_ai_recommend=True,
+        auto_publish_if_ready=True,
+    )
+
+
 async def create_stub(
     db: AsyncSession,
     org_id: uuid.UUID,
@@ -94,15 +221,33 @@ async def create_stub(
     title: str | None,
     responsibility_keywords: list[str],
     product_keywords: list[str],
-    external_card_url: str,
+    external_card_url: str | None = None,
     one_line_blurb: str | None = None,
     avatar_url: str | None = None,
+    publish: bool = True,
+    owner_user_id: uuid.UUID | None = None,
+    want_ai_recommend: bool = True,
+    commit: bool = True,
 ) -> PublicBusinessStub:
-    if not validate_external_url(external_card_url):
+    url = (external_card_url or "").strip() or None
+    if url and not validate_external_url(url):
         raise HTTPException(status_code=400, detail="INVALID_EXTERNAL_URL")
     if avatar_url and not validate_external_url(avatar_url):
         raise HTTPException(status_code=400, detail="INVALID_AVATAR_URL")
 
+    if publish:
+        if owner_user_id is None:
+            raise HTTPException(status_code=400, detail="OWNER_REQUIRED_FOR_PUBLISH")
+        if not url:
+            raise HTTPException(status_code=400, detail="EXTERNAL_URL_REQUIRED_FOR_PUBLISH")
+
+    if owner_user_id is not None:
+        await _require_org_member(db, org_id, owner_user_id)
+        existing = await get_stub_for_owner(db, org_id, owner_user_id)
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="OWNER_ALREADY_HAS_IDENTITY")
+
+    now = datetime.now(UTC) if publish else None
     stub = PublicBusinessStub(
         org_id=org_id,
         display_name=display_name.strip(),
@@ -110,15 +255,23 @@ async def create_stub(
         title=title.strip() if title else None,
         responsibility_keywords=responsibility_keywords,
         product_keywords=product_keywords,
-        external_card_url=external_card_url.strip(),
+        external_card_url=url,
         one_line_blurb=one_line_blurb.strip() if one_line_blurb else None,
         avatar_url=avatar_url.strip() if avatar_url else None,
-        status="draft",
+        status="published" if publish else "draft",
+        published_at=now,
+        want_ai_recommend=want_ai_recommend if not publish else True,
         created_by_user_id=user_id,
+        owner_user_id=owner_user_id,
     )
     db.add(stub)
-    await db.commit()
-    await db.refresh(stub)
+    if commit:
+        await db.commit()
+        await db.refresh(stub)
+        if publish:
+            enqueue_stub_index(stub.id)
+    else:
+        await db.flush()
     return stub
 
 
@@ -134,6 +287,9 @@ async def update_stub(
     external_card_url: str | None = None,
     one_line_blurb: str | None = None,
     avatar_url: str | None = None,
+    owner_user_id: uuid.UUID | None = None,
+    want_ai_recommend: bool | None = None,
+    auto_publish_if_ready: bool = True,
 ) -> PublicBusinessStub:
     if display_name is not None:
         stub.display_name = display_name.strip()
@@ -146,9 +302,10 @@ async def update_stub(
     if product_keywords is not None:
         stub.product_keywords = product_keywords
     if external_card_url is not None:
-        if not validate_external_url(external_card_url):
+        cleaned_url = external_card_url.strip()
+        if cleaned_url and not validate_external_url(cleaned_url):
             raise HTTPException(status_code=400, detail="INVALID_EXTERNAL_URL")
-        stub.external_card_url = external_card_url.strip()
+        stub.external_card_url = cleaned_url or None
     if one_line_blurb is not None:
         stub.one_line_blurb = one_line_blurb.strip() or None
     if avatar_url is not None:
@@ -156,6 +313,29 @@ async def update_stub(
         if cleaned and not validate_external_url(cleaned):
             raise HTTPException(status_code=400, detail="INVALID_AVATAR_URL")
         stub.avatar_url = cleaned or None
+    if owner_user_id is not None:
+        await _require_org_member(db, stub.org_id, owner_user_id)
+        conflict = await get_stub_for_owner(db, stub.org_id, owner_user_id)
+        if conflict is not None and conflict.id != stub.id:
+            raise HTTPException(status_code=409, detail="OWNER_ALREADY_HAS_IDENTITY")
+        stub.owner_user_id = owner_user_id
+    if want_ai_recommend is not None:
+        stub.want_ai_recommend = want_ai_recommend
+
+    # Enterprise default: once URL exists and want AI, go live (unless explicitly unpublished off).
+    if (
+        auto_publish_if_ready
+        and stub.want_ai_recommend
+        and stub.owner_user_id
+        and stub.external_card_url
+        and stub.status in ("draft", "unpublished")
+    ):
+        # "unpublished" means admin turned off — only republish if want_ai_recommend flipped to True
+        # via this update. If already unpublished and only URL changed, stay off unless want set True.
+        if stub.status == "draft" or want_ai_recommend is True:
+            stub.status = "published"
+            stub.published_at = datetime.now(UTC)
+            stub.unpublished_at = None
 
     was_published = stub.status == "published"
     await db.commit()
@@ -173,10 +353,15 @@ async def delete_stub(db: AsyncSession, stub: PublicBusinessStub) -> None:
 
 
 async def publish_stub(db: AsyncSession, stub: PublicBusinessStub) -> PublicBusinessStub:
+    if stub.owner_user_id is None:
+        raise HTTPException(status_code=400, detail="OWNER_REQUIRED_FOR_PUBLISH")
+    if not stub.external_card_url or not validate_external_url(stub.external_card_url):
+        raise HTTPException(status_code=400, detail="EXTERNAL_URL_REQUIRED_FOR_PUBLISH")
     now = datetime.now(UTC)
     stub.status = "published"
     stub.published_at = now
     stub.unpublished_at = None
+    stub.want_ai_recommend = True
     await db.commit()
     await db.refresh(stub)
     enqueue_stub_index(stub.id)
@@ -186,6 +371,7 @@ async def publish_stub(db: AsyncSession, stub: PublicBusinessStub) -> PublicBusi
 async def unpublish_stub(db: AsyncSession, stub: PublicBusinessStub) -> PublicBusinessStub:
     stub.status = "unpublished"
     stub.unpublished_at = datetime.now(UTC)
+    stub.want_ai_recommend = False
     await db.commit()
     await db.refresh(stub)
     enqueue_stub_unindex(stub.id)
@@ -236,6 +422,7 @@ async def import_csv(
             product_keywords=_parse_keyword_cell(row.get("product_keywords")),
             external_card_url=url,
             status="draft",
+            want_ai_recommend=True,
             created_by_user_id=user_id,
         )
         db.add(stub)

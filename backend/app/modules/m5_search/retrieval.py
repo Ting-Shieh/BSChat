@@ -482,6 +482,47 @@ async def count_public_published(db: AsyncSession) -> int:
     return int(result.scalar_one())
 
 
+async def list_public_browse_candidates(
+    db: AsyncSession,
+    *,
+    limit: int = 12,
+) -> list[PublicCandidateDoc]:
+    """List published+indexed stubs for browse-public intent (no keyword match)."""
+    sql = text(
+        """
+        SELECT pdd.stub_id, pdd.search_text,
+               s.org_id, s.display_name, s.company_name, s.title,
+               s.responsibility_keywords, s.product_keywords, s.external_card_url,
+               o.name AS org_name
+        FROM public_directory_documents pdd
+        JOIN public_business_stubs s ON s.id = pdd.stub_id
+        JOIN organizations o ON o.id = s.org_id
+        WHERE s.status = 'published'
+        ORDER BY s.published_at DESC NULLS LAST, s.updated_at DESC
+        LIMIT :lim
+        """
+    )
+    rows = list((await db.execute(sql, {"lim": limit})).all())
+    out: list[PublicCandidateDoc] = []
+    for row in rows:
+        out.append(
+            PublicCandidateDoc(
+                stub_id=row.stub_id,
+                org_id=row.org_id,
+                org_name=row.org_name,
+                display_name=row.display_name,
+                company_name=row.company_name,
+                title=row.title,
+                responsibility_keywords=list(row.responsibility_keywords or []),
+                product_keywords=list(row.product_keywords or []),
+                external_card_url=row.external_card_url or "",
+                search_text=row.search_text,
+                retrieval_score=1.0,
+            )
+        )
+    return out
+
+
 async def _products_for(db: AsyncSession, company_id: uuid.UUID | None) -> tuple[list[str], float | None]:
     if not company_id:
         return [], None

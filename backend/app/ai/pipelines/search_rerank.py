@@ -3,6 +3,7 @@ import re
 import uuid
 
 from app.ai.gemini_client import gemini_generate_text
+from app.ai.openai_client import openai_generate_text
 from app.ai.schemas.search_rerank import MatchSource, ParsedIntent, RerankItem, SearchRerankResponse
 from app.core.config import get_settings
 from app.modules.m5_search.constraints import filter_rerank_results, has_hard_constraints
@@ -187,6 +188,15 @@ async def rerank_contacts(
     )
 
     try:
+        provider = settings.effective_search_provider
+        if provider == "openai" and settings.openai_api_key:
+            text = await openai_generate_text(prompt, model=settings.openai_search_model)
+            return _parse_json(text), False
+
+        if provider == "gemini" and settings.gemini_api_key:
+            text = await gemini_generate_text(prompt, model=settings.gemini_search_model)
+            return _parse_json(text), False
+
         if settings.gemini_api_key:
             text = await gemini_generate_text(prompt, model=settings.gemini_search_model)
             return _parse_json(text), False
@@ -201,6 +211,10 @@ async def rerank_contacts(
                 messages=[{"role": "user", "content": prompt}],
             )
             return _parse_json(msg.content[0].text), False
+
+        if settings.openai_api_key:
+            text = await openai_generate_text(prompt, model=settings.openai_search_model)
+            return _parse_json(text), False
     except Exception:
         return _mock_rerank(query, candidates, intent, search_precision=search_precision), True
 

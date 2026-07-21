@@ -1,32 +1,62 @@
-"""Team-scope resolution for the shared contact pool (v1 dogfood).
+"""Contact pool visibility — enterprise sub-teams (DDR-v4-10/11).
 
-L2 team pool: contacts stay owned by their capturer (contacts.user_id == who
-captured), but visibility is expanded to every member of the same Organization
-(via OrgMember). A user with no org falls back to just themselves — identical to
-the previous per-user behaviour, so this is backward compatible.
+V can see contacts captured by C when:
+  - C == V, or
+  - they share at least one sub_team membership.
 
-This does NOT touch L3 (cross-company public directory / network scope), which
-remains the paid tier.
+Non-enterprise users (and enterprise members with no sub-team) see only themselves.
+Legacy org-wide sharing is retired for enterprise tenants.
 """
+
+from __future__ import annotations
 
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.organization import OrgMember
+from app.models.organization import OrgMember, Organization
+from app.models.sub_team import SubTeam, SubTeamMember
+
+
+async def get_visible_capturer_ids(db: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
+    """User ids whose contacts the caller may list/search."""
+    ent_org_ids = (
+        await db.execute(
+            select(Organization.id)
+            .join(OrgMember, OrgMember.org_id == Organization.id)
+            .where(
+                OrgMember.user_id == user_id,
+                Organization.is_enterprise.is_(True),
+            )
+        )
+    ).scalars().all()
+    if not ent_org_ids:
+        return [user_id]
+
+    my_team_ids = (
+        await db.execute(
+            select(SubTeamMember.sub_team_id)
+            .join(SubTeam, SubTeam.id == SubTeamMember.sub_team_id)
+            .where(
+                SubTeamMember.user_id == user_id,
+                SubTeam.org_id.in_(ent_org_ids),
+            )
+        )
+    ).scalars().all()
+    if not my_team_ids:
+        return [user_id]
+
+    peer_ids = (
+        await db.execute(
+            select(SubTeamMember.user_id).where(SubTeamMember.sub_team_id.in_(my_team_ids))
+        )
+    ).scalars().all()
+    ids = set(peer_ids)
+    ids.add(user_id)
+    return list(ids)
 
 
 async def get_team_user_ids(db: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
-    """Return every user_id whose contacts this user may see (self + org teammates)."""
-    org_ids = (
-        await db.execute(select(OrgMember.org_id).where(OrgMember.user_id == user_id))
-    ).scalars().all()
-    if not org_ids:
-        return [user_id]
-    member_ids = (
-        await db.execute(select(OrgMember.user_id).where(OrgMember.org_id.in_(org_ids)))
-    ).scalars().all()
-    ids = set(member_ids)
-    ids.add(user_id)
-    return list(ids)
+    """Backward-compatible alias for get_visible_capturer_ids."""
+    return await get_visible_capturer_ids(db, user_id)

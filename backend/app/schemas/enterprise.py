@@ -75,6 +75,26 @@ class CreateEnterpriseInviteRequest(BaseModel):
     expires_days: int = Field(default=14, ge=1, le=90)
 
 
+class CreateEnterpriseInviteBatchRequest(BaseModel):
+    emails: list[EmailStr] = Field(min_length=1, max_length=200)
+    expires_days: int = Field(default=14, ge=1, le=90)
+
+
+class BatchInviteItemResult(BaseModel):
+    email: str
+    status: str  # created | skipped
+    reason: str | None = None
+    invite_id: UUID | None = None
+    join_path: str | None = None
+    email_sent: bool = False
+
+
+class CreateEnterpriseInviteBatchResponse(BaseModel):
+    created: int
+    skipped: int
+    items: list[BatchInviteItemResult]
+
+
 class CreateEnterpriseInviteResponse(BaseModel):
     invite_id: UUID
     token: str

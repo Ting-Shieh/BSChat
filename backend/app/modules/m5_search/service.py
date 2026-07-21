@@ -16,7 +16,7 @@ from app.core.entitlements import (
     reset_search_cache_quota_if_needed,
 )
 from app.core.media_urls import public_media_url
-from app.ai.pipelines.search_intent import INTENT_PROMPT_VERSION, parse_intent
+from app.ai.pipelines.search_intent import INTENT_PROMPT_VERSION, parse_intent_result
 from app.ai.pipelines.search_rerank import PROMPT_VERSION as RERANK_PROMPT_VERSION, rerank_contacts
 from app.models.contact import Contact
 from app.models.organization import Organization
@@ -31,10 +31,21 @@ from app.modules.m5_search.retrieval import (
     candidate_to_dict,
     count_indexed,
     count_public_published,
+    list_public_browse_candidates,
     public_candidate_to_dict,
     public_to_candidate_doc,
     retrieve_candidates,
     retrieve_public_candidates,
+)
+from app.modules.m5_search.sessions import (
+    BROWSE_MORE_LIMIT,
+    BROWSE_PREVIEW_LIMIT,
+    build_effective_query,
+    get_session_for_user,
+    list_session_queries,
+    list_sessions,
+    prior_query_texts,
+    resolve_session_for_query,
 )
 from app.modules.m5_search.hybrid import PoolRetrievalDebug, build_semantic_query
 from app.modules.m5_search.public_search import ALLOWED_SEARCH_SCOPES
@@ -53,6 +64,9 @@ from app.schemas.search import (
     SearchQueryResponse,
     SearchQuotasDTO,
     SearchResultItemDTO,
+    SearchSessionDetailResponse,
+    SearchSessionListItem,
+    SearchSessionListResponse,
     SearchStatusResponse,
     StubPreviewDTO,
 )
@@ -243,6 +257,12 @@ async def execute_search(
     if scope not in ALLOWED_SEARCH_SCOPES:
         raise HTTPException(status_code=400, detail="INVALID_SEARCH_SCOPE")
 
+    session = await resolve_session_for_query(
+        db, user, session_id=body.session_id, query_text=body.query_text
+    )
+    priors = await prior_query_texts(db, session.id) if body.session_id else []
+    effective_query = build_effective_query(body.query_text, priors)
+
     indexed = await count_indexed(db, user.id)
     public_pool = await count_public_published(db)
     include_private = scope in ("private", "all")
@@ -260,87 +280,173 @@ async def execute_search(
         else:
             await consume_public_recommend(db, user.entitlement)
 
-    if scope == "private" and indexed == 0:
+    async def _empty(reason: str, suggestions: list[str], cta: dict | None = None) -> SearchQueryResponse:
         q = SearchQuery(
+            session_id=session.id,
             user_id=user.id,
             workspace_id=user.workspace.id,
             query_text=body.query_text,
             search_scope=scope,
             status="EMPTY",
             result_count=0,
+            parsed_intent={"empty_reason": reason},
         )
         db.add(q)
         await db.commit()
         await db.refresh(q)
         return SearchQueryResponse(
             query_id=q.id,
+            session_id=session.id,
             status="EMPTY",
+            query_text=body.query_text,
             empty_state=SearchEmptyStateDTO(
-                reason="NO_INDEXED_CONTACTS",
-                suggestions=["先收錄幾張名片，系統會自動建立搜尋索引"],
+                reason=reason,
+                suggestions=suggestions,
                 sample_queries=await pick_sample_queries(db, user),
-                cta={"action": "capture", "label": "去收錄名片"},
+                cta=cta,
             ),
+        )
+
+    if scope == "private" and indexed == 0:
+        return await _empty(
+            "NO_INDEXED_CONTACTS",
+            ["先收錄幾張名片，系統會自動建立搜尋索引"],
+            {"action": "capture", "label": "去收錄名片"},
         )
 
     if scope == "network" and public_pool == 0:
-        q = SearchQuery(
-            user_id=user.id,
-            workspace_id=user.workspace.id,
-            query_text=body.query_text,
-            search_scope=scope,
-            status="EMPTY",
-            result_count=0,
-        )
-        db.add(q)
-        await db.commit()
-        await db.refresh(q)
-        return SearchQueryResponse(
-            query_id=q.id,
-            status="EMPTY",
-            empty_state=SearchEmptyStateDTO(
-                reason="NO_PUBLIC_DIRECTORY",
-                suggestions=["平台尚無公開商務身份，請稍後再試"],
-                sample_queries=await pick_sample_queries(db, user),
-            ),
-        )
+        return await _empty("NO_PUBLIC_DIRECTORY", ["平台尚無公開商務身份，請稍後再試"])
 
     if scope == "all" and indexed == 0 and public_pool == 0:
-        q = SearchQuery(
-            user_id=user.id,
-            workspace_id=user.workspace.id,
-            query_text=body.query_text,
-            search_scope=scope,
-            status="EMPTY",
-            result_count=0,
-        )
-        db.add(q)
-        await db.commit()
-        await db.refresh(q)
-        return SearchQueryResponse(
-            query_id=q.id,
-            status="EMPTY",
-            empty_state=SearchEmptyStateDTO(
-                reason="NO_INDEXED_CONTACTS",
-                suggestions=["先收錄名片，或等平台有更多公開商務身份"],
-                sample_queries=await pick_sample_queries(db, user),
-                cta={"action": "capture", "label": "去收錄名片"},
-            ),
+        return await _empty(
+            "NO_INDEXED_CONTACTS",
+            ["先收錄名片，或等平台有更多公開商務身份"],
+            {"action": "capture", "label": "去收錄名片"},
         )
 
     await _check_and_increment_quota(db, user)
     started = time.perf_counter()
-    intent = await parse_intent(body.query_text)
-    degraded = False
+    # LLM classifies current turn; if LLM down, offline meta-intent may still browse.
+    parse_result = await parse_intent_result(body.query_text, prior_turns=priors or None)
+    intent = parse_result.intent
+    degraded = not parse_result.llm_ok
     ent = user.entitlement
 
+    if intent.intent_kind in ("browse_public", "browse_public_more"):
+        if not include_public:
+            return await _empty(
+                "PUBLIC_RECOMMEND_UNAVAILABLE" if public_pool > 0 else "NO_PUBLIC_DIRECTORY",
+                (
+                    ["公開推薦試用已用完，升級 Pro 可繼續瀏覽公開身份"]
+                    if public_pool > 0
+                    else ["平台尚無公開商務身份"]
+                ),
+            )
+        preview_limit = (
+            BROWSE_MORE_LIMIT if intent.intent_kind == "browse_public_more" else BROWSE_PREVIEW_LIMIT
+        )
+        pubs = await list_public_browse_candidates(db, limit=preview_limit)
+        query_row = SearchQuery(
+            session_id=session.id,
+            user_id=user.id,
+            workspace_id=user.workspace.id,
+            query_text=body.query_text,
+            parsed_intent={**intent.model_dump(), "public_pool": public_pool},
+            search_scope=scope,
+            status="COMPLETED",
+            result_count=len(pubs),
+            degraded=degraded,
+        )
+        db.add(query_row)
+        await db.flush()
+        results_dto: list[SearchResultItemDTO] = []
+        for rank, pub in enumerate(pubs, start=1):
+            sources = [MatchSourceDTO(field="public_directory", value="browse", confidence=1.0)]
+            db.add(
+                SearchResult(
+                    query_id=query_row.id,
+                    stub_id=pub.stub_id,
+                    rank=rank,
+                    match_score=1.0,
+                    match_reason="公開池樣例（導覽預覽）",
+                    match_sources=[s.model_dump() for s in sources],
+                    source_pool="public_directory",
+                )
+            )
+            results_dto.append(
+                _public_result_dto(
+                    rank,
+                    type("R", (), {"match_reason": "公開池樣例（導覽預覽）", "match_sources": []})(),
+                    pub,
+                    1.0,
+                    sources,
+                )
+            )
+        query_row.latency_ms = int((time.perf_counter() - started) * 1000)
+        remaining = max(0, public_pool - len(pubs))
+        degraded_note = ""
+        if degraded:
+            # Silent degrade for users; infra detail stays in parsed_intent / logs.
+            degraded_note = ""
+        if intent.intent_kind == "browse_public_more":
+            assistant = (
+                f"再展開 {len(pubs)} 位公開身份（池內約 {public_pool} 位）。"
+                + (f" 其餘約 {remaining} 位可用條件收窄。" if remaining else "")
+                + degraded_note
+            )
+            suggestions = ["只要威剛的", "誰做工業電腦", "換個產業關鍵字"]
+        else:
+            assistant = (
+                f"這是「瀏覽公開池」。目前約有 {public_pool} 位已曝光身份；先給你 {len(pubs)} 位樣例。"
+                + (f" 還有約 {remaining} 位未展開。" if remaining else "")
+                + " 可再追問收窄，或說「列更多」。"
+                + degraded_note
+            )
+            suggestions = ["只要威剛的", "誰做工業電腦", "列更多公開身份"]
+        stored = {
+            **intent.model_dump(),
+            "public_pool": public_pool,
+            "assistant_message": assistant,
+            "follow_up_suggestions": suggestions,
+            "llm_ok": parse_result.llm_ok,
+            "llm_error": (parse_result.llm_error or "")[:200] or None,
+        }
+        query_row.parsed_intent = stored
+        await db.commit()
+        return SearchQueryResponse(
+            query_id=query_row.id,
+            session_id=session.id,
+            status="COMPLETED",
+            result_count=len(results_dto),
+            latency_ms=query_row.latency_ms,
+            degraded=degraded,
+            query_text=body.query_text,
+            intent_kind=intent.intent_kind,
+            assistant_message=assistant,
+            follow_up_suggestions=suggestions,
+            results=results_dto,
+        )
+
+    # If AI is down and this wasn't a browse, tell the user instead of silent empty keyword miss.
+    if not parse_result.llm_ok and include_public:
+        # Still allow normal retrieval with fallback keywords below; mark degraded.
+        pass
+
+    # Narrowing follow-ups already included prior turns in the first parse.
     query_row = SearchQuery(
+        session_id=session.id,
         user_id=user.id,
         workspace_id=user.workspace.id,
         query_text=body.query_text,
-        parsed_intent=intent.model_dump(),
+        parsed_intent={
+            **intent.model_dump(),
+            "effective_query": effective_query,
+            "llm_ok": parse_result.llm_ok,
+            "llm_error": (parse_result.llm_error or "")[:200] or None,
+        },
         search_scope=scope,
         status="RETRIEVING",
+        degraded=degraded,
     )
     db.add(query_row)
     await db.flush()
@@ -354,12 +460,12 @@ async def execute_search(
     public_debug: PoolRetrievalDebug | None = None
     if include_private and indexed > 0:
         private_candidates, private_debug = await retrieve_candidates(
-            db, user_id=user.id, query_text=body.query_text, intent=intent
+            db, user_id=user.id, query_text=effective_query, intent=intent
         )
         private_had_candidates = bool(private_candidates)
     if include_public and public_pool > 0:
         public_candidates, public_debug = await retrieve_public_candidates(
-            db, query_text=body.query_text, intent=intent
+            db, query_text=effective_query, intent=intent
         )
         public_had_candidates = bool(public_candidates)
 
@@ -383,12 +489,13 @@ async def execute_search(
     public_validated: list[tuple[object, PublicCandidateDoc]] = []
 
     if rerank_input:
-        rerank_resp, degraded = await rerank_contacts(
+        rerank_resp, rerank_degraded = await rerank_contacts(
             body.query_text,
             rerank_input,
             intent,
             search_precision=precision,
         )
+        degraded = degraded or rerank_degraded
         filtered = filter_rerank_results(rerank_resp.results, cand_map, intent)
         for item in filtered:
             cand = cand_map.get(item.contact_id)
@@ -449,9 +556,11 @@ async def execute_search(
         await db.commit()
         return SearchQueryResponse(
             query_id=query_row.id,
+            session_id=query_row.session_id,
             status="EMPTY",
             latency_ms=latency_ms,
             degraded=degraded,
+            query_text=query_row.query_text,
             debug=debug_dto,
             empty_state=SearchEmptyStateDTO(
                 reason=reason,
@@ -565,15 +674,19 @@ async def execute_search(
     aha = not had_prior and len(results_dto) > 0
     return SearchQueryResponse(
         query_id=query_row.id,
+        session_id=query_row.session_id,
         status="COMPLETED",
         result_count=len(results_dto),
         latency_ms=latency_ms,
         degraded=degraded,
         aha_moment=aha,
         suggest_live=suggest_live_flag,
+        query_text=query_row.query_text,
+        intent_kind=(query_row.parsed_intent or {}).get("intent_kind") or "find_people",
         results=results_dto,
         briefing=briefing,
         debug=debug_dto,
+        follow_up_suggestions=["再更精準一點", "只要特定公司", "換個產品關鍵字"],
     )
 
 
@@ -595,9 +708,11 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
         )
         return SearchQueryResponse(
             query_id=query_row.id,
+            session_id=query_row.session_id,
             status="EMPTY",
             latency_ms=query_row.latency_ms,
             degraded=query_row.degraded,
+            query_text=query_row.query_text,
             debug=_debug_from_stored(stored),
             empty_state=SearchEmptyStateDTO(
                 reason=reason,
@@ -691,12 +806,49 @@ async def get_search_query(db: AsyncSession, user: User, query_id: uuid.UUID) ->
 
     return SearchQueryResponse(
         query_id=query_row.id,
+        session_id=query_row.session_id,
         status=query_row.status,
         result_count=query_row.result_count,
         latency_ms=query_row.latency_ms,
         degraded=query_row.degraded,
         suggest_live=query_row.suggest_live,
+        query_text=query_row.query_text,
+        intent_kind=(query_row.parsed_intent or {}).get("intent_kind"),
+        assistant_message=(query_row.parsed_intent or {}).get("assistant_message"),
+        follow_up_suggestions=list((query_row.parsed_intent or {}).get("follow_up_suggestions") or []),
         results=items,
         briefing=briefing,
         debug=_debug_from_stored(query_row.parsed_intent),
+    )
+
+async def list_search_sessions(db: AsyncSession, user: User) -> SearchSessionListResponse:
+    sessions = await list_sessions(db, user)
+    return SearchSessionListResponse(
+        items=[
+            SearchSessionListItem(
+                id=s.id,
+                title=s.title,
+                turn_count=s.turn_count,
+                updated_at=s.updated_at,
+                created_at=s.created_at,
+            )
+            for s in sessions
+        ]
+    )
+
+
+async def get_search_session_detail(
+    db: AsyncSession, user: User, session_id: uuid.UUID
+) -> SearchSessionDetailResponse:
+    session = await get_session_for_user(db, user, session_id)
+    queries = await list_session_queries(db, session.id)
+    turns: list[SearchQueryResponse] = []
+    for q in queries:
+        turns.append(await get_search_query(db, user, q.id))
+    return SearchSessionDetailResponse(
+        id=session.id,
+        title=session.title,
+        turn_count=session.turn_count,
+        updated_at=session.updated_at,
+        turns=turns,
     )

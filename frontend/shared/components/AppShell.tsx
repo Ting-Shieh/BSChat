@@ -7,6 +7,8 @@ import { useMe } from "@/features/auth/hooks";
 import { useAuthHydrated } from "@/features/auth/useAuthHydrated";
 import { usePendingCount } from "@/features/capture/hooks";
 import { useAuthStore } from "@/features/auth/store";
+import { LineBrowserGuide } from "@/shared/components/LineBrowserGuide";
+import { PwaInstallHint } from "@/shared/components/PwaInstallHint";
 import { ApiError } from "@/shared/lib/api-client";
 import { cn } from "@/shared/lib/cn";
 
@@ -68,6 +70,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         hideChrome && "min-h-dvh bg-black",
       )}
     >
+      {!hideChrome && <LineBrowserGuide variant="card" />}
+      {!hideChrome && (
+        <div className="px-4 pt-3">
+          <PwaInstallHint />
+        </div>
+      )}
+
       {!hideChrome && (
         <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
           <div>
@@ -94,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
       )}
 
-      <div className={cn("flex-1", hideChrome && "flex flex-col bg-black")}>{children}</div>
+      <div className={cn("flex min-h-0 flex-1 flex-col", hideChrome && "bg-black")}>{children}</div>
 
       {!hideChrome && (
         <nav className="sticky bottom-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">

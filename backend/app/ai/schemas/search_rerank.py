@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 
 
 class ParsedIntent(BaseModel):
+    # find_people = match people; browse_public = overview of public pool (LLM-classified)
+    intent_kind: str = "find_people"
     products: list[str] = Field(default_factory=list)
     roles: list[str] = Field(default_factory=list)
     events: list[str] = Field(default_factory=list)

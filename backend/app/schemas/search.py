@@ -125,13 +125,38 @@ class BriefingDTO(BaseModel):
 
 class SearchQueryResponse(BaseModel):
     query_id: UUID
+    session_id: UUID | None = None
     status: str
     result_count: int = 0
     latency_ms: int | None = None
     degraded: bool = False
     aha_moment: bool = False
     suggest_live: bool = False
+    query_text: str | None = None
+    intent_kind: str | None = None
+    assistant_message: str | None = None
+    follow_up_suggestions: list[str] = Field(default_factory=list)
     results: list[SearchResultItemDTO] = Field(default_factory=list)
     briefing: BriefingDTO | None = None
     empty_state: SearchEmptyStateDTO | None = None
     debug: SearchDebugDTO | None = None
+
+
+class SearchSessionListItem(BaseModel):
+    id: UUID
+    title: str
+    turn_count: int
+    updated_at: datetime
+    created_at: datetime
+
+
+class SearchSessionListResponse(BaseModel):
+    items: list[SearchSessionListItem]
+
+
+class SearchSessionDetailResponse(BaseModel):
+    id: UUID
+    title: str
+    turn_count: int
+    updated_at: datetime
+    turns: list[SearchQueryResponse]

@@ -46,11 +46,13 @@ def _to_stub_response(stub) -> StubResponse:
         one_line_blurb=stub.one_line_blurb,
         avatar_url=stub.avatar_url,
         status=stub.status,
+        want_ai_recommend=bool(getattr(stub, "want_ai_recommend", True)),
         published_at=stub.published_at,
         unpublished_at=stub.unpublished_at,
         created_at=stub.created_at,
         updated_at=stub.updated_at,
         share_path=f"/card/{stub.id}" if stub.status == "published" else None,
+        owner_user_id=stub.owner_user_id,
     )
 
 
@@ -117,6 +119,8 @@ async def post_stub(
         external_card_url=body.external_card_url,
         one_line_blurb=body.one_line_blurb,
         avatar_url=body.avatar_url,
+        publish=body.allow_ai_recommend,
+        owner_user_id=body.owner_user_id,
     )
     return _to_stub_response(stub)
 
@@ -154,6 +158,8 @@ async def patch_stub(
         external_card_url=body.external_card_url,
         one_line_blurb=body.one_line_blurb,
         avatar_url=body.avatar_url,
+        owner_user_id=body.owner_user_id,
+        want_ai_recommend=body.want_ai_recommend,
     )
     return _to_stub_response(updated)
 
@@ -202,7 +208,7 @@ async def post_import_csv(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile,
-    auto_publish: bool = Query(default=False),
+    auto_publish: bool = Query(default=True),
 ) -> CsvImportResponse:
     result = await import_csv(
         db,

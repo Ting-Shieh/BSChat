@@ -27,9 +27,13 @@ class StubCreateRequest(BaseModel):
     title: str | None = None
     responsibility_keywords: list[str] = Field(default_factory=list)
     product_keywords: list[str] = Field(default_factory=list)
-    external_card_url: str
+    external_card_url: str | None = None
     one_line_blurb: str | None = None
     avatar_url: str | None = None
+    # Enterprise default: publish into public pool on create (opt-out via false).
+    allow_ai_recommend: bool = True
+    # Account this identity belongs to (required for exposure under DDR-v4-15).
+    owner_user_id: UUID | None = None
 
 
 class StubUpdateRequest(BaseModel):
@@ -41,6 +45,8 @@ class StubUpdateRequest(BaseModel):
     external_card_url: str | None = None
     one_line_blurb: str | None = None
     avatar_url: str | None = None
+    owner_user_id: UUID | None = None
+    want_ai_recommend: bool | None = None
 
 
 class StubResponse(BaseModel):
@@ -51,15 +57,35 @@ class StubResponse(BaseModel):
     title: str | None
     responsibility_keywords: list[str]
     product_keywords: list[str]
-    external_card_url: str
+    external_card_url: str | None = None
     one_line_blurb: str | None = None
     avatar_url: str | None = None
     status: str
+    want_ai_recommend: bool = True
     published_at: datetime | None
     unpublished_at: datetime | None
     created_at: datetime
     updated_at: datetime
     share_path: str | None = None
+    owner_user_id: UUID | None = None
+
+
+class MyPublicIdentityResponse(BaseModel):
+    org_id: UUID
+    org_name: str
+    stub_id: UUID | None = None
+    display_name: str | None = None
+    title: str | None = None
+    external_card_url: str | None = None
+    status: str | None = None
+    want_ai_recommend: bool = True
+    ai_state: str  # pending_invite N/A | pending_url | on | off
+
+
+class MyPublicIdentityUpdate(BaseModel):
+    external_card_url: str = Field(min_length=1)
+    title: str | None = None
+    display_name: str | None = None
 
 
 class PublicCardResponse(BaseModel):

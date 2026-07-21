@@ -11,6 +11,7 @@ from app.api.v1 import (
     orgs,
     public_cards,
     search,
+    sub_teams,
     teams,
 )
 
@@ -18,6 +19,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(me.router, prefix="/me", tags=["me"])
 api_router.include_router(teams.router)
+api_router.include_router(sub_teams.router)
 api_router.include_router(enterprise.router)
 api_router.include_router(ops_enterprise.router)
 api_router.include_router(orgs.router)

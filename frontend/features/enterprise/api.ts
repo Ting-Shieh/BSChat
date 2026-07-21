@@ -121,6 +121,61 @@ export async function createEnterpriseInvite(
   });
 }
 
+export interface BatchInviteItem {
+  email: string;
+  status: "created" | "skipped";
+  reason?: string | null;
+  invite_id?: string | null;
+  join_path?: string | null;
+  email_sent?: boolean;
+}
+
+export interface CreateEnterpriseInviteBatchResponse {
+  created: number;
+  skipped: number;
+  items: BatchInviteItem[];
+}
+
+export async function createEnterpriseInviteBatch(
+  token: string,
+  orgId: string,
+  body: { emails: string[]; expires_days?: number },
+): Promise<CreateEnterpriseInviteBatchResponse> {
+  return apiFetch(`/api/v1/enterprise/orgs/${orgId}/invites/batch`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+export interface MyPublicIdentity {
+  org_id: string;
+  org_name: string;
+  stub_id: string | null;
+  display_name: string | null;
+  title: string | null;
+  external_card_url: string | null;
+  status: string | null;
+  want_ai_recommend: boolean;
+  ai_state: "pending_url" | "on" | "off" | "none" | string;
+}
+
+export async function fetchMyPublicIdentities(token: string): Promise<MyPublicIdentity[]> {
+  return apiFetch("/api/v1/enterprise/me/public-identity", { token });
+}
+
+export async function updateMyPublicIdentity(
+  token: string,
+  orgId: string,
+  body: { external_card_url: string; title?: string | null; display_name?: string | null },
+): Promise<MyPublicIdentity> {
+  return apiFetch(`/api/v1/enterprise/orgs/${orgId}/me/public-identity`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
 export async function listEnterpriseInvites(
   token: string,
   orgId: string,

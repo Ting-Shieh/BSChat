@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BSChat — 子團隊共享池 UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --primary:#0F4C5C; --primary-hover:#0B3A47; --primary-muted:#E6F2F5;
+    --accent:#D97706; --accent-muted:#FEF3C7;
+    --bg:#FAFAF9; --surface:#fff; --border:#E7E5E4;
+    --tp:#1C1917; --ts:#57534E; --tt:#A8A29E;
+    --priv-bg:#F0FDF4; --priv-tx:#166534;
+    --warn-bg:#FFFBEB; --warn-tx:#92400E;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#44403C;font-family:'Noto Sans TC',sans-serif;color:var(--tp);padding:28px 14px 80px}
+  .en{font-family:'Outfit',system-ui,sans-serif}.mono{font-family:'JetBrains Mono',monospace}
+  .head{text-align:center;color:#fff;margin-bottom:22px}
+  .head .t{font-size:17px;font-weight:600}
+  .head .s{font-size:12.5px;color:#D6D3D1;margin-top:6px;line-height:1.55;max-width:640px;margin-left:auto;margin-right:auto}
+  .stage{max-width:1800px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;justify-content:center;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .lbl{color:#fff;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+  .lbl .n{width:22px;height:22px;border-radius:6px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:11px}
+  .cap{color:#E7E5E4;font-size:11.5px;max-width:390px;text-align:center;line-height:1.5}
+  .phone{width:390px;height:740px;background:var(--bg);border-radius:26px;overflow:hidden;box-shadow:0 16px 44px rgba(0,0,0,.32);display:flex;flex-direction:column}
+  .sb{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:11.5px;font-weight:600;flex-shrink:0}
+  .body{flex:1;overflow-y:auto}
+  .body::-webkit-scrollbar{width:0}
+  .tabbar{height:56px;background:#fff;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;flex:1;color:var(--tt)}
+  .tab.on{color:var(--primary);font-weight:600}
+  .chip{font-size:10.5px;padding:5px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .btn{height:40px;border-radius:8px;font-weight:600;font-size:13px;border:none;cursor:pointer;padding:0 14px}
+  .btn-p{background:var(--primary);color:#fff}
+  .btn-o{background:#fff;color:var(--primary);border:1.5px solid var(--primary)}
+  .btn-g{background:#F5F5F4;color:var(--ts)}
+  .btn-d{background:#FEF2F2;color:#B91C1C}
+  .avatar{border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);background:var(--primary-muted);flex-shrink:0}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .sect{font-size:11px;color:var(--tt);font-weight:600;letter-spacing:.4px;margin:14px 16px 8px}
+  input,textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:inherit;background:#fff;color:var(--tp)}
+  textarea{min-height:72px;resize:none}
+  label{display:block;font-size:12.5px;font-weight:500;margin-bottom:6px}
+  .seg{display:flex;background:#F5F5F4;border-radius:10px;padding:3px;margin:0 16px 12px}
+  .seg div{flex:1;text-align:center;font-size:12.5px;padding:8px 0;border-radius:8px;color:var(--ts)}
+  .seg .on{background:#fff;color:var(--primary);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .bar{height:6px;border-radius:999px;background:#F5F5F4;overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;background:var(--primary)}
+  .sheet{position:absolute;inset:0;background:rgba(28,25,23,.35);display:flex;align-items:flex-end;z-index:5}
+  .sheet .panel{width:100%;background:#fff;border-radius:18px 18px 0 0;padding:16px 16px 28px}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="t">BSChat · 子團隊共享池（DDR-v4-10）</div>
+  <div class="s">共享＝僅所屬子團隊 · 主管／成員可建隊 · 不做單張共享 · 與「允許 AI 推薦」分離<br/>原型拋棄式 · 對齊後再 SA／ENG</div>
+</div>
+
+<div class="stage">
+
+  <!-- A 我的：分頁 · 子團隊 Tab -->
+  <div class="col">
+    <div class="lbl"><span class="n en">A</span> 我的 · 分頁（子團隊）</div>
+    <div class="cap">原功能不刪：用「總覽｜子團隊｜偏好」切換，避免一直往下捲</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0">
+          <div style="font-weight:600;font-size:20px">我的</div>
+        </div>
+        <div class="card" style="margin:12px 16px;display:flex;gap:12px;align-items:center">
+          <div class="avatar en" style="width:48px;height:48px">王</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600">王主管</div>
+            <div class="mono" style="font-size:11px;color:var(--ts)">lead@aai.demo</div>
+          </div>
+          <span class="chip" style="background:#F5F5F4;color:var(--ts)">企業</span>
+        </div>
+        <div class="seg">
+          <div>總覽</div>
+          <div class="on">子團隊</div>
+          <div>偏好</div>
+        </div>
+        <p style="margin:0 16px 10px;font-size:12px;color:var(--ts);line-height:1.5">名片只與<strong>同隊</strong>共享。企業成員可自助建隊；主 Admin 可解散任何隊。</p>
+        <div class="card" style="margin:0 16px 8px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;font-size:14px">業務一組</div>
+            <div style="font-size:11.5px;color:var(--tt);margin-top:2px">6 人 · 你是負責人</div>
+          </div>
+          <button class="btn btn-o" style="height:32px;font-size:12px">進入</button>
+        </div>
+        <div class="card" style="margin:0 16px 8px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;font-size:14px">業務二組</div>
+            <div style="font-size:11.5px;color:var(--tt);margin-top:2px">4 人 · 你是負責人</div>
+          </div>
+          <button class="btn btn-o" style="height:32px;font-size:12px">進入</button>
+        </div>
+        <div style="padding:8px 16px 16px">
+          <button class="btn btn-p" style="width:100%">＋ 建立子團隊</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab on">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A2 總覽 Tab -->
+  <div class="col">
+    <div class="lbl"><span class="n en">A2</span> 我的 · 總覽 Tab</div>
+    <div class="cap">用量／升級／登出仍在，只是換頁籤，不是刪掉</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0"><div style="font-weight:600;font-size:20px">我的</div></div>
+        <div class="card" style="margin:12px 16px;display:flex;gap:12px;align-items:center">
+          <div class="avatar en" style="width:48px;height:48px">王</div>
+          <div style="flex:1"><div style="font-weight:600">王主管</div><div class="mono" style="font-size:11px;color:var(--ts)">lead@aai.demo</div></div>
+          <span class="chip" style="background:#F5F5F4;color:var(--ts)">企業</span>
+        </div>
+        <div class="seg">
+          <div class="on">總覽</div>
+          <div>子團隊</div>
+          <div>偏好</div>
+        </div>
+        <div class="card" style="margin:0 16px 10px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px"><span>對話搜尋</span><span class="mono" style="color:var(--tt)">12／100</span></div>
+          <div class="bar"><i style="width:12%"></i></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-top:12px"><span>即時上網查</span><span class="mono" style="color:var(--tt)">3／100</span></div>
+          <div class="bar"><i style="width:3%"></i></div>
+          <div style="margin-top:12px;font-size:12px;color:var(--ts)">公開推薦 · 方案內無限</div>
+        </div>
+        <div style="padding:0 16px">
+          <button class="btn btn-o" style="width:100%;margin-bottom:8px">企業後台</button>
+          <button class="btn btn-g" style="width:100%">登出</button>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab on">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A3 偏好 Tab -->
+  <div class="col">
+    <div class="lbl"><span class="n en">A3</span> 我的 · 偏好 Tab</div>
+    <div class="cap">精準度／自動更新／隱私說明</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0"><div style="font-weight:600;font-size:20px">我的</div></div>
+        <div class="card" style="margin:12px 16px;display:flex;gap:12px;align-items:center">
+          <div class="avatar en" style="width:48px;height:48px">王</div>
+          <div style="flex:1"><div style="font-weight:600">王主管</div></div>
+          <span class="chip" style="background:#F5F5F4;color:var(--ts)">企業</span>
+        </div>
+        <div class="seg">
+          <div>總覽</div>
+          <div>子團隊</div>
+          <div class="on">偏好</div>
+        </div>
+        <div class="sect" style="margin-top:0">搜尋精準度</div>
+        <div class="seg" style="margin-bottom:14px">
+          <div>精準</div>
+          <div class="on">平衡</div>
+          <div>探索</div>
+        </div>
+        <div class="card" style="margin:0 16px 10px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13.5px;font-weight:500">公司資料過期自動更新</div>
+            <div style="font-size:11.5px;color:var(--tt);margin-top:2px">Pro／企業</div>
+          </div>
+          <div style="width:42px;height:26px;border-radius:999px;background:var(--primary);position:relative"><span style="position:absolute;right:3px;top:3px;width:20px;height:20px;border-radius:999px;background:#fff"></span></div>
+        </div>
+        <div style="margin:0 16px;border-radius:12px;background:var(--priv-bg);color:var(--priv-tx);padding:12px;font-size:12.5px;line-height:1.55">
+          🔒 僅子團隊可見 · 不對外公開<br/>
+          <span style="opacity:.9">團隊共享 ≠「允許 AI 推薦」</span>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab on">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B 建立 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">B</span> 建立子團隊</div>
+    <div class="cap">隊名必填；建立者＝負責人；建立後再邀請才共享</div>
+    <div class="phone" style="position:relative">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body" style="filter:blur(1px);opacity:.55;pointer-events:none">
+        <div style="padding:14px 16px;font-weight:600;font-size:20px">我的</div>
+      </div>
+      <div class="sheet">
+        <div class="panel">
+          <div style="width:36px;height:4px;background:#E7E5E4;border-radius:999px;margin:0 auto 14px"></div>
+          <div style="font-weight:600;font-size:17px;margin-bottom:4px">建立子團隊</div>
+          <div style="font-size:12.5px;color:var(--ts);margin-bottom:14px;line-height:1.5">此隊的名片只對隊員可見。非業務可不加入任何隊。</div>
+          <label>隊名</label>
+          <input value="業務一組" />
+          <div style="height:12px"></div>
+          <label>說明（選填）</label>
+          <textarea placeholder="例如：北區通路開發"></textarea>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-g" style="flex:1">取消</button>
+            <button class="btn btn-p" style="flex:1.2">建立</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C 隊詳情 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">C</span> 子團隊詳情</div>
+    <div class="cap">邀請連結、成員、負責人可移除／解散</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:12px 16px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px;color:var(--primary)">‹</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:17px">業務一組</div>
+            <div style="font-size:11.5px;color:var(--tt)">威剛智聯 · 6 人</div>
+          </div>
+        </div>
+        <div style="margin:0 16px 12px;border-radius:12px;background:var(--primary-muted);padding:12px;font-size:12.5px;color:var(--primary);line-height:1.5">
+          你是負責人。邀請同事後，彼此收錄的名片才會在本隊共享。
+        </div>
+        <div style="padding:0 16px 10px;display:flex;gap:8px">
+          <button class="btn btn-p" style="flex:1">複製邀請連結</button>
+          <button class="btn btn-o" style="flex:1">分享</button>
+        </div>
+        <div class="sect">成員</div>
+        <div class="card" style="margin:0 16px 8px;display:flex;gap:10px;align-items:center">
+          <div class="avatar en" style="width:40px;height:40px">王</div>
+          <div style="flex:1"><div style="font-weight:600;font-size:13.5px">王主管</div><div class="mono" style="font-size:10.5px;color:var(--tt)">lead@…</div></div>
+          <span class="chip" style="background:var(--primary);color:#fff">負責人</span>
+        </div>
+        <div class="card" style="margin:0 16px 8px;display:flex;gap:10px;align-items:center">
+          <div class="avatar en" style="width:40px;height:40px">李</div>
+          <div style="flex:1"><div style="font-weight:600;font-size:13.5px">李業務</div><div class="mono" style="font-size:10.5px;color:var(--tt)">lee@…</div></div>
+          <button style="border:none;background:none;color:var(--tt);font-size:12px">移除</button>
+        </div>
+        <div class="card" style="margin:0 16px 8px;display:flex;gap:10px;align-items:center">
+          <div class="avatar en" style="width:40px;height:40px">陳</div>
+          <div style="flex:1"><div style="font-weight:600;font-size:13.5px">陳業務</div><div class="mono" style="font-size:10.5px;color:var(--tt)">chen@…</div></div>
+          <button style="border:none;background:none;color:var(--tt);font-size:12px">移除</button>
+        </div>
+        <div style="padding:16px">
+          <button class="btn btn-d" style="width:100%">解散子團隊</button>
+          <div style="font-size:11px;color:var(--tt);text-align:center;margin-top:8px;line-height:1.4">解散後成員改回個人庫；名片不會刪除</div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab on">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D 邀請加入 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">D</span> 邀請加入頁</div>
+    <div class="cap">與「企業席次邀請」文案分開</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body" style="display:flex;flex-direction:column;justify-content:center;padding:24px 20px">
+        <div style="text-align:center;margin-bottom:28px">
+          <div class="en" style="font-size:13px;font-weight:600;color:var(--primary);letter-spacing:.5px">BSChat</div>
+          <div style="font-size:22px;font-weight:600;margin-top:12px;line-height:1.35">加入子團隊</div>
+          <div style="font-size:14px;color:var(--ts);margin-top:8px;line-height:1.5">
+            <strong style="color:var(--tp)">威剛智聯</strong><br/>業務一組
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;font-size:12.5px;color:var(--ts);line-height:1.55">
+          加入後，你與同隊成員的名片庫互相可見。<br/>
+          這<strong>不是</strong>企業開通邀請；也不會把名片公開給 AI 推薦。
+        </div>
+        <button class="btn btn-p" style="width:100%;margin-bottom:10px">接受並加入</button>
+        <button class="btn btn-g" style="width:100%">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- E 名片庫（有隊） -->
+  <div class="col">
+    <div class="lbl"><span class="n en">E</span> 名片庫 · 有子團隊</div>
+    <div class="cap">可見＝自己的卡 ∪ 同隊他人收錄；列上標隊名</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:flex-end">
+          <div>
+            <div style="font-weight:600;font-size:20px">名片庫</div>
+            <div style="font-size:12px;color:var(--tt);margin-top:2px">28 位 · 可見範圍內</div>
+          </div>
+        </div>
+        <div style="margin:10px 16px;border-radius:10px;background:var(--priv-bg);color:var(--priv-tx);padding:10px 12px;font-size:12px">
+          僅子團隊可見 · 不對外公開
+        </div>
+        <div style="display:flex;gap:7px;padding:4px 16px 8px;overflow-x:auto">
+          <span class="chip" style="background:var(--primary);color:#fff">全部 28</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--ts)">業務一組</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--ts)">業務二組</span>
+          <span class="chip" style="background:#fff;border:1px solid var(--border);color:var(--ts)">💤 沉睡</span>
+        </div>
+        <div style="padding:4px 16px">
+          <div class="card" style="margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px">ADL</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px">林大同</div>
+              <div style="font-size:12px;color:var(--ts)">威盛 · 採購經理</div>
+              <div style="font-size:11px;color:var(--tt);margin-top:4px">👤 由 李業務 收錄 · 業務一組</div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px">KY</div>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:14px">高雅</div>
+              <div style="font-size:12px;color:var(--ts)">訊芯 · BD</div>
+              <div style="font-size:11px;color:var(--tt);margin-top:4px">👤 由你收錄 · 業務一組</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab on">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F 無隊＝個人庫 -->
+  <div class="col">
+    <div class="lbl"><span class="n en">F</span> 無子團隊 · 個人庫</div>
+    <div class="cap">非業務／尚未入隊：只有自己的卡</div>
+    <div class="phone">
+      <div class="sb"><span class="mono">9:41</span><span class="mono">5G</span></div>
+      <div class="body">
+        <div style="padding:14px 16px 0">
+          <div style="font-weight:600;font-size:20px">名片庫</div>
+          <div style="font-size:12px;color:var(--tt);margin-top:2px">3 位 · 僅自己</div>
+        </div>
+        <div style="margin:10px 16px;border-radius:10px;background:var(--warn-bg);color:var(--warn-tx);padding:10px 12px;font-size:12px;line-height:1.5">
+          個人庫 · 尚未加入子團隊<br/>
+          <a href="#" style="color:var(--primary);font-weight:600;text-decoration:none">前往建立或加入 →</a>
+        </div>
+        <div style="padding:4px 16px">
+          <div class="card" style="margin-bottom:10px;display:flex;gap:11px">
+            <div class="avatar en" style="width:42px;height:42px">ZH</div>
+            <div>
+              <div style="font-weight:600;font-size:14px">張浩</div>
+              <div style="font-size:12px;color:var(--ts)">供應商 · 業務</div>
+              <div style="font-size:11px;color:var(--tt);margin-top:4px">👤 由你收錄</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab">🔍<span>搜尋</span></div>
+        <div class="tab on">📇<span>名片庫</span></div>
+        <div class="tab" style="transform:translateY(-6px)"><span style="width:40px;height:40px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">＋</span></div>
+        <div class="tab">✓<span>待確認</span></div>
+        <div class="tab">👤<span>我的</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width:720px;margin:36px auto 0;color:#E7E5E4;font-size:12.5px;line-height:1.65;text-align:center">
+  規格：<span class="mono" style="color:#fff">spec/design/BSChat_UIUX_subteam.md</span>
+  · Kickoff：<span class="mono" style="color:#fff">spec/kickoffs/subteam-pool-20260720.md</span><br/>
+  確認流程後再進 SA／ENG。單張共享不做（畫面無開關）。
+</div>
+</body>
+</html>

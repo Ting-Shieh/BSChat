@@ -81,7 +81,7 @@ export function SearchPlanPanel({
           p,
           2,
           "done",
-          indexedHint != null ? `名片庫約 ${indexedHint} 位可搜尋` : "檢索你的／團隊池",
+          indexedHint != null ? `名片庫約 ${indexedHint} 位可搜尋` : "檢索你的／子團隊庫",
         ),
       ),
     );

@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     enterprise_application,
     magic_login,
     organization,
+    sub_team,
     team_invite,
     user,
 )

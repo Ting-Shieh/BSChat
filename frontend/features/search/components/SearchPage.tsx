@@ -1,25 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { useMe } from "@/features/auth/hooks";
 import { PrivacyStrip } from "@/shared/components/PrivacyStrip";
-import type { SearchQueryResponse, SearchResultItem } from "@/shared/types/search";
-import { useLiveAugment, useSearch, useSearchStatus } from "../hooks";
+import type { SearchQueryResponse } from "@/shared/types/search";
+import {
+  useLiveAugment,
+  useSearch,
+  useSearchSessionDetail,
+  useSearchSessions,
+  useSearchStatus,
+} from "../hooks";
 import { AhaMomentModal } from "./AhaMomentModal";
 import { DegradedSearchBanner } from "./DegradedSearchBanner";
 import { SearchDebugPanel } from "./SearchDebugPanel";
-import { SearchEmptyState } from "./SearchEmptyState";
 import { SearchInput } from "./SearchInput";
 import { SearchPlanPanel } from "./SearchPlanPanel";
-import { SearchResultCard } from "./SearchResultCard";
+import {
+  isBrowseIntent,
+  looksLikeBrowseOverview,
+  SearchTurnReply,
+} from "./SearchTurnReply";
 
 const AHA_KEY = "bschat-aha-shown";
 const SHOW_SEARCH_DEBUG = process.env.NODE_ENV === "development";
 
-function isPublicResult(item: SearchResultItem) {
-  return item.source_pool === "public_directory";
-}
+type Turn = {
+  query_text: string;
+  response: SearchQueryResponse | null;
+  pending?: boolean;
+};
 
 export function SearchPage() {
   const { data: me } = useMe();
@@ -38,43 +49,68 @@ export function SearchPage() {
   const apiScope = canUsePublic ? "all" : "private";
 
   const search = useSearch(apiScope);
-  const [searchResult, setSearchResult] = useState<SearchQueryResponse | null>(null);
-  const liveAugment = useLiveAugment(searchResult?.query_id);
-  const [showAha, setShowAha] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [draftQuery, setDraftQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
   const [planSession, setPlanSession] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showAha, setShowAha] = useState(false);
+  const [loadSessionId, setLoadSessionId] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const sessions = useSearchSessions(showHistory);
+  const sessionDetail = useSearchSessionDetail(loadSessionId);
+
+  const latest = turns[turns.length - 1];
+  const latestResult = latest?.response ?? null;
+  const liveAugment = useLiveAugment(latestResult?.query_id);
 
   useEffect(() => {
-    if (search.data) {
-      setSearchResult(search.data);
-    }
-  }, [search.data]);
-
-  useEffect(() => {
-    if (searchResult?.aha_moment && !localStorage.getItem(AHA_KEY)) {
+    if (latestResult?.aha_moment && !localStorage.getItem(AHA_KEY)) {
       setShowAha(true);
       localStorage.setItem(AHA_KEY, "1");
     }
-  }, [searchResult?.aha_moment]);
+  }, [latestResult?.aha_moment]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns.length, search.isPending]);
+
+  useEffect(() => {
+    if (!sessionDetail.data) return;
+    setSessionId(sessionDetail.data.id);
+    setTurns(
+      sessionDetail.data.turns.map((t) => ({
+        query_text: t.query_text || "",
+        response: t,
+      })),
+    );
+    setLoadSessionId(null);
+    setShowHistory(false);
+  }, [sessionDetail.data]);
 
   const quotaZero = status ? status.quotas.search_cache_remaining_today <= 0 : false;
   const liveQuotaZero = status ? status.quotas.live_augment_remaining_month <= 0 : false;
   const inputDisabled = search.isPending || (status != null && (quotaZero || !status.can_search));
   const liveBusy = liveAugment.isPending;
 
-  const allResults = searchResult?.results ?? [];
-  const privateResults = useMemo(
-    () => allResults.filter((item) => !isPublicResult(item)),
-    [allResults],
-  );
-  const publicResults = useMemo(() => allResults.filter(isPublicResult), [allResults]);
-
-  const showPlan = search.isPending || (submittedQuery != null && searchResult != null);
+  const browsePending =
+    search.isPending && latest != null && looksLikeBrowseOverview(latest.query_text);
+  const showPlan =
+    !browsePending &&
+    !isBrowseIntent(latestResult?.intent_kind) &&
+    (search.isPending || (latest != null && latest.response != null));
   const planFinished =
     !search.isPending &&
-    searchResult != null &&
-    (searchResult.status === "COMPLETED" || searchResult.status === "EMPTY");
+    latestResult != null &&
+    !isBrowseIntent(latestResult.intent_kind) &&
+    (latestResult.status === "COMPLETED" || latestResult.status === "EMPTY");
+
+  const followUps = useMemo(() => {
+    const fromApi = latestResult?.follow_up_suggestions ?? [];
+    if (fromApi.length) return fromApi;
+    return [];
+  }, [latestResult]);
 
   const statusLine = () => {
     if (statusLoading) return "載入中…";
@@ -93,27 +129,73 @@ export function SearchPage() {
   };
 
   const handleSearch = (q: string) => {
-    setSubmittedQuery(q);
-    setSearchResult(null);
+    const text = q.trim();
+    if (!text) return;
+    setDraftQuery("");
+    setTurns((prev) => [...prev, { query_text: text, response: null, pending: true }]);
     setPlanSession((n) => n + 1);
-    search.mutate(q);
+    search.mutate(
+      { query_text: text, session_id: sessionId },
+      {
+        onSuccess: (data) => {
+          if (data.session_id) setSessionId(data.session_id);
+          setTurns((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.pending) {
+              next[next.length - 1] = { query_text: text, response: data };
+            } else {
+              next.push({ query_text: text, response: data });
+            }
+            return next;
+          });
+        },
+        onError: () => {
+          setTurns((prev) => {
+            const next = [...prev];
+            if (next[next.length - 1]?.pending) next.pop();
+            return next;
+          });
+        },
+      },
+    );
+  };
+
+  const startNewChat = () => {
+    setSessionId(null);
+    setTurns([]);
+    setDraftQuery("");
+    setPlanSession((n) => n + 1);
   };
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <div>
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">AI 搜尋</h1>
-        <p className="text-sm text-[var(--color-text-secondary)]">{statusLine()}</p>
+    <main className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4">
+        <div>
+          <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">AI 搜尋</h1>
+          <p className="text-sm text-[var(--color-text-secondary)]">{statusLine()}</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="rounded-lg bg-[var(--color-primary-muted)] px-2.5 py-1.5 text-xs font-semibold text-[var(--color-primary)]"
+          >
+            紀錄
+          </button>
+          {turns.length > 0 && (
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-secondary)]"
+            >
+              新對話
+            </button>
+          )}
+        </div>
       </div>
 
-      <SearchInput
-        disabled={inputDisabled}
-        suggestions={status?.sample_queries ?? []}
-        value={draftQuery}
-        onValueChange={setDraftQuery}
-        onSubmit={handleSearch}
-      />
-
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4">
       {statusError && (
         <p className="text-xs text-[var(--color-accent-hover)]">無法載入搜尋狀態，仍可直接搜尋。</p>
       )}
@@ -122,7 +204,7 @@ export function SearchPage() {
         <p className="text-xs text-[var(--color-accent-hover)]">今日搜尋額度已用完，明天再試。</p>
       )}
 
-      {!statusLoading && status && !status.can_search && (
+      {!statusLoading && status && !status.can_search && turns.length === 0 && (
         <div className="rounded-xl border border-dashed border-[var(--color-border)] p-4 text-center text-sm text-[var(--color-text-secondary)]">
           先收錄幾張名片建立索引
           <Link href="/capture" className="mt-2 block text-[var(--color-primary)]">
@@ -131,182 +213,201 @@ export function SearchPage() {
         </div>
       )}
 
-      {submittedQuery && (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--color-primary)] px-3.5 py-2.5 text-[14px] leading-relaxed text-white">
-            {submittedQuery}
-          </div>
-        </div>
-      )}
-
-      {showPlan && (
-        <SearchPlanPanel
-          key={planSession}
-          running={search.isPending}
-          finished={planFinished}
-          includePublicPool={includePublicPool}
-          publicSkipReason={publicSkipReason}
-          indexedHint={status?.indexed_count}
-        />
-      )}
-
-      {search.isPending && (
-        <p className="animate-pulse text-center text-xs text-[var(--color-text-tertiary)]">
-          正在向伺服器搜尋（含 AI 排序），請勿關閉頁面…
+      {turns.length === 0 && (
+        <p className="text-center text-xs text-[var(--color-text-tertiary)]">
+          可問「公開商務有誰」瀏覽公開池，或描述你要找的產品／職稱。同一串可追問。
         </p>
       )}
+
+      {turns.map((turn, idx) => {
+        const isLast = idx === turns.length - 1;
+        return (
+          <div key={`${turn.query_text}-${idx}`} className="flex flex-col gap-3">
+            <div className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--color-primary)] px-3.5 py-2.5 text-[14px] leading-relaxed text-white">
+                {turn.query_text}
+              </div>
+            </div>
+
+            {isLast && showPlan && (
+              <SearchPlanPanel
+                key={planSession}
+                running={search.isPending}
+                finished={planFinished}
+                includePublicPool={includePublicPool}
+                publicSkipReason={publicSkipReason}
+                indexedHint={status?.indexed_count}
+              />
+            )}
+
+            {isLast && search.isPending && (
+              <p className="animate-pulse text-center text-xs text-[var(--color-text-tertiary)]">
+                {browsePending
+                  ? "正在瀏覽公開池樣例…"
+                  : "正在向伺服器搜尋（含 AI 排序），請勿關閉頁面…"}
+              </p>
+            )}
+
+            {turn.response && (
+              <SearchTurnReply
+                searchResult={turn.response}
+                canUsePublic={canUsePublic}
+                poolCount={poolCount}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {search.isError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
-          搜尋失敗（後端逾時或連線中斷）。請再送一次，或確認 API 仍在跑。
-          <button
-            type="button"
-            className="ml-2 font-medium underline"
-            onClick={() => submittedQuery && handleSearch(submittedQuery)}
-          >
-            重試
-          </button>
+          搜尋失敗（後端逾時或連線中斷）。請再送一次。
         </div>
       )}
 
-      {liveBusy && (
-        <p className="animate-pulse text-sm text-[var(--color-text-secondary)]">正在即時查詢公司最新資訊…</p>
-      )}
+      {isLastTurnLive(latestResult, liveQuotaZero, liveBusy, liveAugment, status, setTurns)}
 
-      {searchResult?.status === "COMPLETED" && searchResult.suggest_live && !liveQuotaZero && (
-        <div className="rounded-xl border border-[var(--color-ai-border)] bg-[var(--color-ai-bg)] p-4">
-          <p className="text-sm text-[var(--color-ai-text)]">
-            部分結果的公司資料可能已過期，可即時上網查最新產品資訊（本月剩{" "}
-            {status?.quotas.live_augment_remaining_month ?? "—"} 次）。
-          </p>
-          <button
-            type="button"
-            disabled={liveBusy}
-            onClick={() =>
-              liveAugment.mutate(undefined, {
-                onSuccess: (data) => setSearchResult(data),
-              })
-            }
-            className="mt-3 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
-          >
-            即時查詢
-          </button>
-        </div>
-      )}
+      {latestResult?.debug && SHOW_SEARCH_DEBUG && <SearchDebugPanel debug={latestResult.debug} />}
 
-      {searchResult?.status === "COMPLETED" && searchResult.suggest_live && liveQuotaZero && (
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          本月即時查詢額度已用完（{status?.quotas.live_augment_remaining_month ?? 0} 次）。
-        </p>
-      )}
-
-      {liveAugment.isError && (
-        <p className="text-xs text-[var(--color-accent-hover)]">即時查詢失敗，請稍後再試。</p>
-      )}
-
-      {searchResult?.debug && SHOW_SEARCH_DEBUG && (
-        <SearchDebugPanel debug={searchResult.debug} />
-      )}
-
-      {searchResult?.status === "COMPLETED" && searchResult.degraded && allResults.length > 0 && (
+      {latestResult?.status === "COMPLETED" && latestResult.degraded && (latestResult.results?.length ?? 0) > 0 && (
         <DegradedSearchBanner />
       )}
 
-      {searchResult?.status === "COMPLETED" && allResults.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {searchResult.briefing && (
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--color-primary)] text-sm text-white">
-                  ✦
-                </span>
-                <span className="text-[13px] font-semibold text-[var(--color-primary)]">商機簡報</span>
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-primary)]">
-                {searchResult.briefing.headline}
-              </p>
-              {searchResult.latency_ms ? (
-                <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
-                  {searchResult.latency_ms}ms
-                  {searchResult.degraded ? " · 簡化排序" : ""}
-                </p>
-              ) : null}
-            </div>
-          )}
-
-          {privateResults.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-bold tracking-wide text-[var(--color-text-tertiary)]">
-                你的名片庫 · 團隊池
-              </p>
-              {privateResults.map((item) => (
-                <SearchResultCard
-                  key={item.stub_id ?? item.contact_id ?? `p-${item.rank}`}
-                  item={item}
-                  queryId={searchResult.query_id}
-                />
-              ))}
-            </div>
-          )}
-
-          {(publicResults.length > 0 || (canUsePublic && privateResults.length > 0)) && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-bold tracking-wide text-[var(--color-text-tertiary)]">
-                AI 推薦 · 公開身份
-              </p>
-              {publicResults.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-[var(--color-border)] px-3 py-3 text-xs text-[var(--color-text-secondary)]">
-                  {poolCount === 0
-                    ? "目前沒有可推薦的公開身份（或尚未有企業公開名片）。"
-                    : "本次未從公開池配對到合適人選。"}
-                </p>
-              ) : (
-                publicResults.map((item) => (
-                  <SearchResultCard
-                    key={item.stub_id ?? item.contact_id ?? `pub-${item.rank}`}
-                    item={item}
-                    queryId={searchResult.query_id}
-                  />
-                ))
-              )}
-            </div>
-          )}
-
-          {!canUsePublic && privateResults.length > 0 && (
-            <p className="rounded-xl border border-dashed border-[var(--color-border)] px-3 py-3 text-xs text-[var(--color-text-secondary)]">
-              公開推薦試用已用完。升級 Pro 可繼續從公開身份找商機。
-              <Link href="/settings" className="ml-1 text-[var(--color-primary)]">
-                去升級 →
-              </Link>
-            </p>
-          )}
-
-          {searchResult.briefing &&
-            searchResult.briefing.scanned_count > searchResult.briefing.match_count && (
-              <p className="px-2 pt-1 text-center text-xs leading-relaxed text-[var(--color-text-tertiary)]">
-                其餘{" "}
-                <span className="font-semibold text-[var(--color-text-secondary)]">
-                  {searchResult.briefing.scanned_count - searchResult.briefing.match_count}
-                </span>{" "}
-                張，我判斷跟這個需求對不上，
-                <span className="font-semibold text-[var(--color-text-secondary)]">沒有硬湊給你</span>。
-              </p>
-            )}
+      {followUps.length > 0 && !search.isPending && (
+        <div className="flex flex-wrap gap-2">
+          {followUps.map((s) => (
+            <button
+              key={s}
+              type="button"
+              disabled={inputDisabled}
+              onClick={() => handleSearch(s)}
+              className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]"
+            >
+              {s}
+            </button>
+          ))}
         </div>
       )}
 
-      {searchResult?.status === "COMPLETED" && allResults.length === 0 && (
-        <p className="rounded-xl border border-dashed border-[var(--color-border)] px-3 py-4 text-center text-sm text-[var(--color-text-secondary)]">
-          搜尋完成，但這次沒有足夠吻合的人選（沒有硬湊結果）。
-        </p>
-      )}
-
-      {searchResult?.status === "EMPTY" && searchResult.empty_state && (
-        <SearchEmptyState state={searchResult.empty_state} />
-      )}
-
+      <div ref={bottomRef} />
       <PrivacyStrip className="text-center" />
+      </div>
+
+      <div className="shrink-0 border-t border-[var(--color-border)]/60 bg-[var(--color-bg)] px-3 pb-3 pt-2">
+        <SearchInput
+          disabled={inputDisabled}
+          suggestions={status?.sample_queries ?? []}
+          showSuggestions={turns.length === 0}
+          value={draftQuery}
+          onValueChange={setDraftQuery}
+          onSubmit={handleSearch}
+          placeholder={turns.length === 0 ? "用一句話描述你要找的人…" : "追問或開新搜尋…"}
+          submitLabel="送出"
+        />
+      </div>
+
       {showAha && <AhaMomentModal onClose={() => setShowAha(false)} />}
+
+      {showHistory && (
+        <div
+          className="fixed inset-0 z-40 flex items-end bg-black/35 sm:items-center sm:justify-center"
+          onClick={() => setShowHistory(false)}
+        >
+          <div
+            className="max-h-[78vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[var(--color-surface)] p-4 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-base font-semibold text-[var(--color-text-primary)]">對話紀錄</p>
+                <p className="text-[11px] text-[var(--color-text-tertiary)]">點開可回看上次問什麼</p>
+              </div>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F5F4] text-lg"
+                onClick={() => setShowHistory(false)}
+              >
+                ×
+              </button>
+            </div>
+            {sessions.isLoading && (
+              <p className="text-xs text-[var(--color-text-secondary)]">載入中…</p>
+            )}
+            {(sessions.data?.items ?? []).length === 0 && !sessions.isLoading && (
+              <p className="text-sm text-[var(--color-text-secondary)]">尚無對話紀錄</p>
+            )}
+            <ul className="space-y-2">
+              {(sessions.data?.items ?? []).map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl border border-[var(--color-border)] px-3 py-2.5 text-left hover:border-[var(--color-primary)]"
+                    onClick={() => setLoadSessionId(s.id)}
+                  >
+                    <p className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+                      {s.title}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-[var(--color-text-tertiary)]">
+                      {new Date(s.updated_at).toLocaleString()} · {s.turn_count} 則
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {sessionDetail.isLoading && (
+              <p className="mt-2 text-xs text-[var(--color-text-secondary)]">開啟對話中…</p>
+            )}
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function isLastTurnLive(
+  latestResult: SearchQueryResponse | null,
+  liveQuotaZero: boolean,
+  liveBusy: boolean,
+  liveAugment: ReturnType<typeof useLiveAugment>,
+  status: ReturnType<typeof useSearchStatus>["data"],
+  setTurns: Dispatch<SetStateAction<Turn[]>>,
+) {
+  if (!latestResult?.suggest_live) return null;
+  if (liveQuotaZero) {
+    return (
+      <p className="text-xs text-[var(--color-text-secondary)]">
+        本月即時查詢額度已用完（{status?.quotas.live_augment_remaining_month ?? 0} 次）。
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-[var(--color-ai-border)] bg-[var(--color-ai-bg)] p-4">
+      <p className="text-sm text-[var(--color-ai-text)]">
+        部分結果的公司資料可能已過期，可即時上網查最新產品資訊（本月剩{" "}
+        {status?.quotas.live_augment_remaining_month ?? "—"} 次）。
+      </p>
+      <button
+        type="button"
+        disabled={liveBusy}
+        onClick={() =>
+          liveAugment.mutate(undefined, {
+            onSuccess: (data) => {
+              setTurns((prev) => {
+                if (!prev.length) return prev;
+                const next = [...prev];
+                next[next.length - 1] = {
+                  ...next[next.length - 1],
+                  response: data,
+                };
+                return next;
+              });
+            },
+          })
+        }
+        className="mt-3 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {liveBusy ? "查詢中…" : "即時查詢"}
+      </button>
+    </div>
   );
 }

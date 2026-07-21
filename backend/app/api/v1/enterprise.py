@@ -14,6 +14,9 @@ from app.models.organization import OrgMember
 from app.modules.enterprise import service as ent
 from app.modules.enterprise.email import send_enterprise_invite_email
 from app.schemas.enterprise import (
+    BatchInviteItemResult,
+    CreateEnterpriseInviteBatchRequest,
+    CreateEnterpriseInviteBatchResponse,
     CreateEnterpriseInviteRequest,
     CreateEnterpriseInviteResponse,
     EnterpriseApplicationCreate,
@@ -24,7 +27,12 @@ from app.schemas.enterprise import (
     EnterpriseOrgSummary,
     TransferAdminRequest,
 )
+from app.schemas.org import MyPublicIdentityResponse, MyPublicIdentityUpdate
 from app.schemas.team import TeamResponse
+from app.modules.m11_public_directory.service import (
+    list_my_public_identities,
+    update_my_public_identity,
+)
 
 router = APIRouter(tags=["enterprise"])
 logger = logging.getLogger(__name__)
@@ -196,6 +204,117 @@ async def create_invite(
         expires_at=invite.expires_at,
         join_path=join_path,
         email_sent=email_sent,
+    )
+
+
+@router.post(
+    "/enterprise/orgs/{org_id}/invites/batch",
+    response_model=CreateEnterpriseInviteBatchResponse,
+)
+async def create_invite_batch(
+    org_id: UUID,
+    body: CreateEnterpriseInviteBatchRequest,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> CreateEnterpriseInviteBatchResponse:
+    from app.models.organization import Organization
+
+    raw_results = await ent.create_enterprise_invite_batch(
+        db,
+        user,
+        org_id=org_id,
+        emails=[str(e) for e in body.emails],
+        expires_days=body.expires_days,
+    )
+    org = await db.get(Organization, org_id)
+    assert org is not None
+    await db.commit()
+
+    settings = get_settings()
+    items: list[BatchInviteItemResult] = []
+    created = 0
+    skipped = 0
+    for row in raw_results:
+        if row["status"] != "created":
+            skipped += 1
+            items.append(
+                BatchInviteItemResult(
+                    email=row["email"],
+                    status="skipped",
+                    reason=row.get("reason"),
+                )
+            )
+            continue
+        created += 1
+        join_path = row["join_path"]
+        join_url = f"{settings.frontend_base_url.rstrip('/')}{join_path}"
+        email_sent = False
+        try:
+            email_sent = await send_enterprise_invite_email(
+                to_email=row["email"],
+                org_name=org.name,
+                inviter_name=user.display_name or user.email,
+                join_url=join_url,
+                expires_at=row["expires_at"],
+            )
+        except HTTPException as exc:
+            logger.warning("Enterprise batch invite email failed: %s", exc.detail)
+            email_sent = False
+        items.append(
+            BatchInviteItemResult(
+                email=row["email"],
+                status="created",
+                invite_id=row["invite_id"],
+                join_path=join_path,
+                email_sent=email_sent,
+            )
+        )
+    return CreateEnterpriseInviteBatchResponse(created=created, skipped=skipped, items=items)
+
+
+@router.get("/enterprise/me/public-identity", response_model=list[MyPublicIdentityResponse])
+async def get_my_public_identity(
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> list[MyPublicIdentityResponse]:
+    rows = await list_my_public_identities(db, user)
+    return [MyPublicIdentityResponse(**row) for row in rows]
+
+
+@router.patch(
+    "/enterprise/orgs/{org_id}/me/public-identity",
+    response_model=MyPublicIdentityResponse,
+)
+async def patch_my_public_identity(
+    org_id: UUID,
+    body: MyPublicIdentityUpdate,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> MyPublicIdentityResponse:
+    from app.models.organization import Organization
+
+    stub = await update_my_public_identity(
+        db,
+        user,
+        org_id,
+        external_card_url=body.external_card_url,
+        title=body.title,
+        display_name=body.display_name,
+    )
+    org = await db.get(Organization, org_id)
+    assert org is not None
+    from app.modules.m11_public_directory.service import stub_ai_state
+
+    return MyPublicIdentityResponse(
+        org_id=org.id,
+        org_name=org.name,
+        stub_id=stub.id,
+        display_name=stub.display_name,
+        title=stub.title,
+        external_card_url=stub.external_card_url,
+        status=stub.status,
+        want_ai_recommend=bool(stub.want_ai_recommend),
+        ai_state=stub_ai_state(stub),
     )
 
 

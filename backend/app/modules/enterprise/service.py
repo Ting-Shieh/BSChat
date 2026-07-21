@@ -94,7 +94,7 @@ async def unpublish_user_stubs_in_org(db: AsyncSession, org_id: uuid.UUID, user_
     result = await db.execute(
         select(PublicBusinessStub).where(
             PublicBusinessStub.org_id == org_id,
-            PublicBusinessStub.created_by_user_id == user_id,
+            PublicBusinessStub.owner_user_id == user_id,
             PublicBusinessStub.status == "published",
         )
     )
@@ -102,6 +102,7 @@ async def unpublish_user_stubs_in_org(db: AsyncSession, org_id: uuid.UUID, user_
     for stub in stubs:
         stub.status = "unpublished"
         stub.unpublished_at = datetime.now(UTC)
+        stub.want_ai_recommend = False
         enqueue_stub_unindex(stub.id)
     if stubs:
         await db.flush()
@@ -154,6 +155,12 @@ async def provision_enterprise_org(
 
     await upgrade_to_enterprise(db, admin_user, member)
     await db.flush()
+
+    from app.modules.m11_public_directory.service import ensure_member_public_identity
+
+    await ensure_member_public_identity(
+        db, org=org, user=admin_user, created_by_user_id=admin_user.id
+    )
     return org
 
 
@@ -307,6 +314,70 @@ async def create_enterprise_invite(
     return invite, raw
 
 
+async def create_enterprise_invite_batch(
+    db: AsyncSession,
+    admin: User,
+    *,
+    org_id: uuid.UUID,
+    emails: list[str],
+    expires_days: int = 14,
+) -> list[dict]:
+    """Create many invites; skip existing members and pending invites for same email."""
+    await require_primary_admin(db, admin, org_id)
+    if expires_days < 1 or expires_days > 90:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="INVALID_EXPIRES_DAYS")
+
+    # Existing member emails
+    member_rows = await list_org_members(db, org_id)
+    member_emails = {u.email.strip().lower() for _, u in member_rows}
+
+    pending = await list_enterprise_invites(db, org_id)
+    pending_emails = {
+        (i.invited_email or "").strip().lower()
+        for i in pending
+        if i.revoked_at is None and i.use_count < i.max_uses and i.invited_email
+    }
+
+    seen: set[str] = set()
+    results: list[dict] = []
+    for raw_email in emails:
+        email = str(raw_email).strip().lower()
+        if not email or "@" not in email:
+            results.append({"email": email or str(raw_email), "status": "skipped", "reason": "INVALID_EMAIL"})
+            continue
+        if email in seen:
+            results.append({"email": email, "status": "skipped", "reason": "DUPLICATE_IN_BATCH"})
+            continue
+        seen.add(email)
+        if email in member_emails:
+            results.append({"email": email, "status": "skipped", "reason": "ALREADY_MEMBER"})
+            continue
+        if email in pending_emails:
+            results.append({"email": email, "status": "skipped", "reason": "INVITE_PENDING"})
+            continue
+
+        invite, raw = await create_enterprise_invite(
+            db,
+            admin,
+            org_id=org_id,
+            invited_email=email,
+            expires_days=expires_days,
+        )
+        pending_emails.add(email)
+        results.append(
+            {
+                "email": email,
+                "status": "created",
+                "reason": None,
+                "invite_id": invite.id,
+                "token": raw,
+                "expires_at": invite.expires_at,
+                "join_path": f"/join/enterprise/{raw}",
+            }
+        )
+    return results
+
+
 async def list_enterprise_invites(db: AsyncSession, org_id: uuid.UUID) -> list[TeamInvite]:
     result = await db.execute(
         select(TeamInvite)
@@ -348,9 +419,12 @@ async def accept_enterprise_invite(db: AsyncSession, user: User, raw_token: str)
         select(OrgMember).where(OrgMember.org_id == org.id, OrgMember.user_id == user.id)
     )
     member = member_result.scalar_one_or_none()
+    from app.modules.m11_public_directory.service import ensure_member_public_identity
+
     if member is not None:
-        # Already in org — still ensure enterprise plan
+        # Already in org — still ensure enterprise plan + public identity
         await upgrade_to_enterprise(db, user, member)
+        await ensure_member_public_identity(db, org=org, user=user, created_by_user_id=user.id)
         return org
 
     if org.seat_limit is not None:
@@ -364,6 +438,8 @@ async def accept_enterprise_invite(db: AsyncSession, user: User, raw_token: str)
     await upgrade_to_enterprise(db, user, member)
     invite.use_count += 1
     await db.flush()
+
+    await ensure_member_public_identity(db, org=org, user=user, created_by_user_id=user.id)
     return org
 
 

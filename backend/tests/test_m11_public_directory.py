@@ -76,7 +76,15 @@ async def _get_org_id(client: AsyncClient, headers: dict) -> str:
 
 @pytest.mark.asyncio
 async def test_m11_stub_crud_publish_index(monkeypatch):
-    _sync_index(monkeypatch)
+    # Avoid async enqueue race; index synchronously in assertions.
+    monkeypatch.setattr(
+        "app.modules.m11_public_directory.service.enqueue_stub_index",
+        lambda _stub_id: None,
+    )
+    monkeypatch.setattr(
+        "app.modules.m11_public_directory.service.enqueue_stub_unindex",
+        lambda _stub_id: None,
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _login(client, seed_org=None)
         headers = {"Authorization": f"Bearer {token}"}
@@ -107,30 +115,52 @@ async def test_m11_stub_crud_publish_index(monkeypatch):
                 "responsibility_keywords": ["通路"],
                 "product_keywords": ["工控"],
                 "external_card_url": "https://example.com/card/test",
+                "allow_ai_recommend": False,
             },
         )
         assert create.status_code == 201, create.text
         stub_id = create.json()["id"]
         assert create.json()["status"] == "draft"
 
+        # Explicit draft → bind owner + publish
+        me = await client.get("/api/v1/me", headers=headers)
+        owner_id = me.json()["id"]
+        draft = await client.post(
+            f"/api/v1/orgs/{org_id}/stubs",
+            headers=headers,
+            json={
+                "display_name": "草稿窗口",
+                "company_name": "Test Corp",
+                "product_keywords": ["工控"],
+                "external_card_url": "https://example.com/card/draft",
+                "allow_ai_recommend": False,
+                "owner_user_id": owner_id,
+            },
+        )
+        assert draft.status_code == 201, draft.text
+        assert draft.json()["status"] == "draft"
+        draft_id = draft.json()["id"]
+
         publish = await client.post(
-            f"/api/v1/orgs/{org_id}/stubs/{stub_id}/publish",
+            f"/api/v1/orgs/{org_id}/stubs/{draft_id}/publish",
             headers=headers,
         )
         assert publish.status_code == 200, publish.text
         assert publish.json()["status"] == "published"
 
         async with async_session_factory() as db:
-            await index_stub(db, uuid.UUID(stub_id))
+            await index_stub(db, uuid.UUID(draft_id))
         async with async_session_factory() as db:
             doc = await db.scalar(
-                select(PublicDirectoryDocument).where(PublicDirectoryDocument.stub_id == uuid.UUID(stub_id))
+                select(PublicDirectoryDocument).where(
+                    PublicDirectoryDocument.stub_id == uuid.UUID(draft_id)
+                )
             )
             assert doc is not None
             assert "工控" in doc.search_text
 
         unpublish = await client.post(
-            f"/api/v1/orgs/{org_id}/stubs/{stub_id}/unpublish",
+            f"/api/v1/orgs/{org_id}/stubs/{draft_id}/unpublish",
             headers=headers,
         )
         assert unpublish.status_code == 200, unpublish.text
@@ -138,10 +168,10 @@ async def test_m11_stub_crud_publish_index(monkeypatch):
         async with async_session_factory() as db:
             from app.modules.m11_public_directory.index_builder import unindex_stub
 
-            await unindex_stub(db, uuid.UUID(stub_id))
+            await unindex_stub(db, uuid.UUID(draft_id))
         async with async_session_factory() as db:
             doc = await db.scalar(
-                select(PublicDirectoryDocument).where(PublicDirectoryDocument.stub_id == uuid.UUID(stub_id))
+                select(PublicDirectoryDocument).where(PublicDirectoryDocument.stub_id == uuid.UUID(draft_id))
             )
             assert doc is None
 
@@ -149,6 +179,7 @@ async def test_m11_stub_crud_publish_index(monkeypatch):
 @pytest.mark.asyncio
 async def test_m11_patch_published_reindexes(monkeypatch):
     reindex_calls: list[uuid.UUID] = []
+    index_tasks: list[asyncio.Task] = []
 
     async def _index_now(stub_id: uuid.UUID) -> None:
         async with async_session_factory() as db:
@@ -156,7 +187,7 @@ async def test_m11_patch_published_reindexes(monkeypatch):
 
     def enqueue_index(stub_id: uuid.UUID) -> None:
         reindex_calls.append(stub_id)
-        asyncio.get_running_loop().create_task(_index_now(stub_id))
+        index_tasks.append(asyncio.get_running_loop().create_task(_index_now(stub_id)))
 
     monkeypatch.setattr(
         "app.modules.m11_public_directory.service.enqueue_stub_index",
@@ -180,6 +211,8 @@ async def test_m11_patch_published_reindexes(monkeypatch):
                 "company_name": "Edit Corp",
                 "product_keywords": ["舊關鍵字"],
                 "external_card_url": "https://example.com/card/edit",
+                "allow_ai_recommend": False,
+                "owner_user_id": (await client.get("/api/v1/me", headers=headers)).json()["id"],
             },
         )
         assert create.status_code == 201, create.text
@@ -190,10 +223,10 @@ async def test_m11_patch_published_reindexes(monkeypatch):
             headers=headers,
         )
         assert publish.status_code == 200, publish.text
+        if index_tasks:
+            await asyncio.gather(*index_tasks)
+            index_tasks.clear()
         reindex_calls.clear()
-
-        async with async_session_factory() as db:
-            await index_stub(db, stub_id)
 
         patch = await client.patch(
             f"/api/v1/orgs/{org_id}/stubs/{stub_id}",
@@ -206,8 +239,10 @@ async def test_m11_patch_published_reindexes(monkeypatch):
         assert patch.status_code == 200, patch.text
         assert patch.json()["display_name"] == "更新後窗口"
         assert stub_id in reindex_calls
+        if index_tasks:
+            await asyncio.gather(*index_tasks)
+            index_tasks.clear()
 
-        await asyncio.sleep(0.05)
         async with async_session_factory() as db:
             doc = await db.scalar(
                 select(PublicDirectoryDocument).where(PublicDirectoryDocument.stub_id == stub_id)

@@ -15,15 +15,17 @@ export interface PublicStub {
   title: string | null;
   responsibility_keywords: string[];
   product_keywords: string[];
-  external_card_url: string;
+  external_card_url: string | null;
   one_line_blurb?: string | null;
   avatar_url?: string | null;
   status: "draft" | "published" | "unpublished";
+  want_ai_recommend?: boolean;
   published_at: string | null;
   unpublished_at: string | null;
   created_at: string;
   updated_at: string;
   share_path?: string | null;
+  owner_user_id?: string | null;
 }
 
 export interface StubPayload {
@@ -32,9 +34,13 @@ export interface StubPayload {
   title?: string | null;
   responsibility_keywords?: string[];
   product_keywords?: string[];
-  external_card_url: string;
+  external_card_url?: string | null;
   one_line_blurb?: string | null;
   avatar_url?: string | null;
+  /** Default true: publish into public AI pool on create. */
+  allow_ai_recommend?: boolean;
+  want_ai_recommend?: boolean;
+  owner_user_id?: string | null;
 }
 
 export interface PublicCard {

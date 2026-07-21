@@ -109,16 +109,37 @@ export interface Briefing {
 
 export interface SearchQueryResponse {
   query_id: string;
+  session_id?: string | null;
   status: string;
   result_count?: number;
   latency_ms?: number | null;
   degraded?: boolean;
   aha_moment?: boolean;
   suggest_live?: boolean;
+  query_text?: string | null;
+  intent_kind?: string | null;
+  assistant_message?: string | null;
+  follow_up_suggestions?: string[];
   results?: SearchResultItem[];
   briefing?: Briefing | null;
   empty_state?: SearchEmptyState;
   debug?: SearchDebugInfo | null;
+}
+
+export interface SearchSessionListItem {
+  id: string;
+  title: string;
+  turn_count: number;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface SearchSessionDetail {
+  id: string;
+  title: string;
+  turn_count: number;
+  updated_at: string;
+  turns: SearchQueryResponse[];
 }
 
 export type SearchScope = "private" | "network" | "all";
