@@ -62,9 +62,12 @@ export function useCreateSubTeamInvite(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (email: string) => createSubTeamInvite(token!, teamId, { email }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-team-invites", teamId] });
-      void qc.invalidateQueries({ queryKey: ["notifications"] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["sub-team-invites", teamId] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["sub-team-invites", teamId] });
     },
   });
 }
@@ -74,8 +77,9 @@ export function useRevokeSubTeamInvite(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inviteId: string) => revokeSubTeamInvite(token!, inviteId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-team-invites", teamId] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["sub-team-invites", teamId] });
+      await qc.refetchQueries({ queryKey: ["sub-team-invites", teamId] });
     },
   });
 }
@@ -85,9 +89,12 @@ export function useAcceptSubTeamInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inviteToken: string) => acceptSubTeamInvite(token!, inviteToken),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-teams"] });
-      void qc.invalidateQueries({ queryKey: ["notifications"] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["sub-teams"] }),
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
     },
   });
 }
@@ -107,9 +114,14 @@ export function useAcceptNotification() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => acceptNotification(token!, id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["notifications"] });
-      void qc.invalidateQueries({ queryKey: ["sub-teams"] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["notifications"] }),
+        qc.invalidateQueries({ queryKey: ["sub-teams"] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["notifications"] });
+      await qc.refetchQueries({ queryKey: ["sub-teams"] });
     },
   });
 }
@@ -119,8 +131,9 @@ export function useMarkNotificationRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => markNotificationRead(token!, id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["notifications"] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["notifications"] });
+      await qc.refetchQueries({ queryKey: ["notifications"] });
     },
   });
 }
@@ -130,8 +143,9 @@ export function useLeaveSubTeam(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => leaveSubTeam(token!, teamId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-teams"] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["sub-teams"] });
+      await qc.refetchQueries({ queryKey: ["sub-teams"] });
     },
   });
 }
@@ -141,8 +155,9 @@ export function useDissolveSubTeam(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => dissolveSubTeam(token!, teamId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-teams"] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["sub-teams"] });
+      await qc.refetchQueries({ queryKey: ["sub-teams"] });
     },
   });
 }
@@ -152,8 +167,9 @@ export function useRemoveSubTeamMember(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => removeSubTeamMember(token!, teamId, userId),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["sub-team", teamId] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["sub-team", teamId] });
+      await qc.refetchQueries({ queryKey: ["sub-team", teamId] });
     },
   });
 }

@@ -8,14 +8,14 @@ import type { EnterpriseInvitePreview } from "@/features/enterprise/api";
 import { useAcceptEnterpriseInvite } from "@/features/enterprise/hooks";
 import { useMe } from "@/features/auth/hooks";
 import { useAuthStore } from "@/features/auth/store";
-import { ApiError } from "@/shared/lib/api-client";
+import { formatApiError } from "@/shared/lib/api-client";
 
 function JoinEnterpriseBody() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const router = useRouter();
   const bschatToken = useAuthStore((s) => s.token);
-  const { data: me } = useMe();
+  const { data: me, refetch: refetchMe } = useMe();
   const accept = useAcceptEnterpriseInvite();
   const [preview, setPreview] = useState<EnterpriseInvitePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ function JoinEnterpriseBody() {
     void previewEnterpriseInvite(token)
       .then(setPreview)
       .catch((e) => {
-        setError(e instanceof ApiError ? e.message : "邀請無效或已過期");
+        setError(formatApiError(e, "邀請無效或已過期"));
       });
   }, [token]);
 
@@ -37,13 +37,27 @@ function JoinEnterpriseBody() {
       return;
     }
     accept.mutate(token, {
-      onSuccess: () => router.replace("/contacts"),
-      onError: (e) => setError(e instanceof Error ? e.message : "加入失敗"),
+      onSuccess: async () => {
+        await refetchMe();
+        router.replace("/contacts");
+        router.refresh();
+      },
+      onError: (e) => setError(formatApiError(e, "加入失敗")),
     });
-  }, [bschatToken, token, preview, me, accept, router]);
+  }, [bschatToken, token, preview, me, accept, router, refetchMe]);
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return (
+      <div className="flex w-full max-w-sm flex-col gap-3">
+        <p className="text-sm leading-relaxed text-red-600">{error}</p>
+        <Link
+          href="/contacts"
+          className="rounded-lg border border-[var(--color-border)] bg-white px-4 py-2.5 text-center text-sm font-semibold"
+        >
+          返回名片庫
+        </Link>
+      </div>
+    );
   }
 
   if (!preview) {

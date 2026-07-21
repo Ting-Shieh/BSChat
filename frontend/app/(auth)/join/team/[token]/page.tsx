@@ -7,7 +7,7 @@ import { previewSubTeamInvite } from "@/features/subteam/api";
 import type { SubTeamInvitePreview } from "@/features/subteam/api";
 import { useAcceptSubTeamInvite } from "@/features/subteam/hooks";
 import { useAuthStore } from "@/features/auth/store";
-import { ApiError } from "@/shared/lib/api-client";
+import { formatApiError } from "@/shared/lib/api-client";
 
 export default function JoinSubTeamPage() {
   const params = useParams<{ token: string }>();
@@ -26,7 +26,7 @@ export default function JoinSubTeamPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "邀請無效或已過期");
+          setError(formatApiError(err, "邀請無效或已過期"));
         }
       });
     return () => {
@@ -40,9 +40,12 @@ export default function JoinSubTeamPage() {
       return;
     }
     accept.mutate(token, {
-      onSuccess: () => router.replace("/settings?tab=teams"),
+      onSuccess: () => {
+        router.replace("/settings?tab=teams");
+        router.refresh();
+      },
       onError: (err) => {
-        setError(err instanceof ApiError ? err.message : "加入失敗");
+        setError(formatApiError(err, "加入失敗"));
       },
     });
   }

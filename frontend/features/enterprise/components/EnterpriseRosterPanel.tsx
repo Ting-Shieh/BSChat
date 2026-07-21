@@ -21,6 +21,7 @@ import {
 } from "@/features/org/hooks";
 import type { PublicStub } from "@/features/org/api";
 import { cn } from "@/shared/lib/cn";
+import { formatApiError } from "@/shared/lib/api-client";
 
 type AiState = "on" | "off" | "none" | "pending" | "pending_url";
 
@@ -272,7 +273,7 @@ export function EnterpriseRosterPanel({
                     );
                     setEmail("");
                   },
-                  onError: (e) => setError(e instanceof Error ? e.message : "邀請失敗"),
+                  onError: (e) => setError(formatApiError(e, "邀請失敗")),
                 },
               );
             }}
@@ -316,7 +317,7 @@ export function EnterpriseRosterPanel({
                       );
                       setBatchEmails("");
                     },
-                    onError: (e) => setError(e instanceof Error ? e.message : "批次邀請失敗"),
+                    onError: (e) => setError(formatApiError(e, "批次邀請失敗")),
                   },
                 );
               }}
@@ -501,8 +502,7 @@ export function EnterpriseRosterPanel({
                         onClick={() => {
                           if (!confirm(`移除 ${m.email}？將失去企業能力並下架公開身份。`)) return;
                           removeMember.mutate(m.user_id, {
-                            onError: (e) =>
-                              setError(e instanceof Error ? e.message : "移除失敗"),
+                            onError: (e) => setError(formatApiError(e, "移除失敗")),
                           });
                         }}
                       >
@@ -593,7 +593,7 @@ export function EnterpriseRosterPanel({
               onClick={() => {
                 if (!confirm("確定轉移主 Admin？")) return;
                 transfer.mutate(transferUserId, {
-                  onError: (e) => setError(e instanceof Error ? e.message : "轉移失敗"),
+                  onError: (e) => setError(formatApiError(e, "轉移失敗")),
                 });
               }}
             >

@@ -5,14 +5,7 @@ import {
   useMarkNotificationRead,
   useNotifications,
 } from "@/features/subteam/hooks";
-import { ApiError } from "@/shared/lib/api-client";
-
-const STATUS_HINT: Record<string, string> = {
-  NOT_ORG_MEMBER: "對方須先是企業成員",
-  INVITE_NOT_USABLE: "邀請已失效",
-  EMAIL_MISMATCH: "此邀請不是發給你的帳號",
-  ALREADY_MEMBER: "你已在此子團隊",
-};
+import { formatApiError } from "@/shared/lib/api-client";
 
 export function NotificationsPanel() {
   const { data, isLoading } = useNotifications();
@@ -66,15 +59,7 @@ export function NotificationsPanel() {
                     onClick={() => {
                       accept.mutate(n.id, {
                         onError: (e) => {
-                          let code =
-                            e instanceof ApiError ? e.message : "無法接受邀請";
-                          try {
-                            const p = JSON.parse(code) as { detail?: string };
-                            if (p.detail) code = p.detail;
-                          } catch {
-                            /* keep */
-                          }
-                          window.alert(STATUS_HINT[code] ?? code);
+                          window.alert(formatApiError(e, "無法接受邀請"));
                         },
                       });
                     }}

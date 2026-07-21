@@ -46,7 +46,13 @@ export function useAcceptEnterpriseInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inviteToken: string) => acceptEnterpriseInvite(token!, inviteToken),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["me"] }),
+        qc.invalidateQueries({ queryKey: ["enterprise-members"] }),
+        qc.invalidateQueries({ queryKey: ["enterprise-invites"] }),
+      ]);
+    },
   });
 }
 
@@ -74,7 +80,10 @@ export function useCreateEnterpriseInvite(orgId: string) {
   return useMutation({
     mutationFn: (body: { email: string; expires_days?: number }) =>
       createEnterpriseInvite(token!, orgId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] });
+      await qc.refetchQueries({ queryKey: ["enterprise-invites", orgId] });
+    },
   });
 }
 
@@ -84,7 +93,10 @@ export function useCreateEnterpriseInviteBatch(orgId: string) {
   return useMutation({
     mutationFn: (body: { emails: string[]; expires_days?: number }) =>
       createEnterpriseInviteBatch(token!, orgId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] });
+      await qc.refetchQueries({ queryKey: ["enterprise-invites", orgId] });
+    },
   });
 }
 
@@ -120,9 +132,13 @@ export function useRemoveEnterpriseMember(orgId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => removeEnterpriseMember(token!, orgId, userId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["enterprise-members", orgId] });
-      qc.invalidateQueries({ queryKey: ["me"] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["enterprise-members", orgId] }),
+        qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+      await qc.refetchQueries({ queryKey: ["enterprise-members", orgId] });
     },
   });
 }
@@ -132,7 +148,10 @@ export function useRevokeEnterpriseInvite(orgId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inviteId: string) => revokeEnterpriseInvite(token!, inviteId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] });
+      await qc.refetchQueries({ queryKey: ["enterprise-invites", orgId] });
+    },
   });
 }
 
