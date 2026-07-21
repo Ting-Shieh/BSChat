@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useMe } from "@/features/auth/hooks";
 import { useAuthHydrated } from "@/features/auth/useAuthHydrated";
 import { usePendingCount } from "@/features/capture/hooks";
+import { useNotifications } from "@/features/subteam/hooks";
 import { useAuthStore } from "@/features/auth/store";
 import { LineBrowserGuide } from "@/shared/components/LineBrowserGuide";
 import { PwaInstallHint } from "@/shared/components/PwaInstallHint";
@@ -27,7 +28,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const { data: me, isError: meError, error: meQueryError } = useMe();
   const { data: pending } = usePendingCount();
+  const { data: notifs } = useNotifications();
   const logout = useAuthStore((s) => s.logout);
+  const notifUnread = notifs?.unread_count ?? 0;
 
   useEffect(() => {
     if (hydrated && !token) router.replace("/login");
@@ -143,6 +146,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       {tab.badge && (pending?.count ?? 0) > 0 && (
                         <span className="absolute -right-2.5 -top-1.5 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--color-warning)] px-0.5 text-[9px] font-semibold text-white">
                           {pending!.count > 9 ? "9+" : pending!.count}
+                        </span>
+                      )}
+                      {tab.href === "/settings" && notifUnread > 0 && (
+                        <span className="absolute -right-2.5 -top-1.5 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--color-primary)] px-0.5 text-[9px] font-semibold text-white">
+                          {notifUnread > 9 ? "9+" : notifUnread}
                         </span>
                       )}
                     </span>

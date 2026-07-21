@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class CreateSubTeamRequest(BaseModel):
@@ -38,8 +39,8 @@ class SubTeamDetail(BaseModel):
 
 
 class CreateSubTeamInviteRequest(BaseModel):
+    email: EmailStr
     expires_days: int = Field(default=14, ge=1, le=90)
-    max_uses: int = Field(default=50, ge=1, le=500)
 
 
 class CreateSubTeamInviteResponse(BaseModel):
@@ -48,8 +49,24 @@ class CreateSubTeamInviteResponse(BaseModel):
     sub_team_id: UUID
     sub_team_name: str
     org_name: str
+    invited_email: str
     expires_at: datetime
     join_path: str
+    email_sent: bool
+
+
+InviteStatus = Literal["pending", "accepted", "revoked", "expired"]
+
+
+class SubTeamInviteListItem(BaseModel):
+    invite_id: UUID
+    invited_email: str | None
+    status: InviteStatus
+    expires_at: datetime
+    created_at: datetime
+    revoked_at: datetime | None = None
+    use_count: int
+    max_uses: int
 
 
 class SubTeamInvitePreview(BaseModel):
@@ -57,6 +74,7 @@ class SubTeamInvitePreview(BaseModel):
     sub_team_name: str
     org_id: UUID
     org_name: str
+    invited_email: str | None = None
     expires_at: datetime
     seats_remaining: int
 
@@ -67,3 +85,18 @@ class OrgSubTeamAdminRow(BaseModel):
     member_count: int
     owner_label: str | None
     created_at: datetime
+
+
+class NotificationItem(BaseModel):
+    id: UUID
+    kind: str
+    title: str
+    body: str | None
+    payload: dict[str, Any]
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationItem]
+    unread_count: int

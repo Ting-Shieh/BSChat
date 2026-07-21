@@ -9,6 +9,7 @@ import { cn } from "@/shared/lib/cn";
 import { PwaInstallHint } from "@/shared/components/PwaInstallHint";
 import { TeamInviteSection } from "./TeamInviteSection";
 import { SubTeamSettingsPanel } from "@/features/subteam/components/SubTeamSettingsPanel";
+import { NotificationsPanel } from "@/features/subteam/components/NotificationsPanel";
 import { MyPublicIdentityPanel } from "@/features/enterprise/components/MyPublicIdentityPanel";
 
 const INTERVALS = [30, 60, 90] as const;
@@ -134,6 +135,7 @@ export function SettingsPage() {
 
       {tab === "overview" && (
         <div className="space-y-4">
+          <NotificationsPanel />
           <PwaInstallHint variant="settings" />
 
           <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5">

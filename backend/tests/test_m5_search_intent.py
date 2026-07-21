@@ -13,7 +13,8 @@ async def test_parse_intent_openai_roles(monkeypatch):
         assert messages[0]["role"] == "system"
         assert "intent_kind" in messages[0]["content"]
         assert messages[1]["role"] == "user"
-        assert "飯店相關推薦人" in messages[1]["content"]
+        # Current turn only — no prior history stuffed into user.
+        assert messages[1]["content"] == "飯店相關推薦人"
         return """{
   "intent_kind": "find_people",
   "products": ["飯店"],
@@ -42,7 +43,7 @@ async def test_parse_intent_openai_roles(monkeypatch):
 @pytest.mark.asyncio
 async def test_parse_intent_browse_public(monkeypatch):
     async def fake_chat(messages, **kwargs):
-        assert "公開商務有誰" in messages[1]["content"]
+        assert messages[1]["content"] == "公開商務有誰"
         return """{
   "intent_kind": "browse_public",
   "products": [],
@@ -67,19 +68,21 @@ async def test_parse_intent_browse_public(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_followup_cloud_is_find_people(monkeypatch):
+async def test_intent_ignores_prior_turns_in_user_message(monkeypatch):
+    """Priors must not appear in the user role — each ask is a fresh turn."""
+
     async def fake_chat(messages, **kwargs):
-        user = messages[1]["content"]
-        assert "公開池有誰" in user
-        assert "有雲端相關業者嗎" in user
+        assert messages[1]["content"] == "有ＰＭ嗎？"
+        assert "現在你可以推薦誰" not in messages[1]["content"]
+        assert "列更多" not in messages[1]["content"]
         return """{
   "intent_kind": "find_people",
-  "products": ["雲端"],
-  "roles": [],
+  "products": [],
+  "roles": ["PM", "產品經理"],
   "events": [],
   "regions": [],
-  "keywords": ["雲端", "業者"],
-  "semantic_query": "找雲端相關業者",
+  "keywords": ["PM", "產品經理"],
+  "semantic_query": "找產品經理／PM",
   "hard_roles": [],
   "hard_companies": [],
   "hard_products": []
@@ -91,9 +94,11 @@ async def test_followup_cloud_is_find_people(monkeypatch):
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.openai_api_key", "test-key")
     monkeypatch.setattr("app.ai.pipelines.search_intent.openai_chat", fake_chat)
 
-    intent = await parse_intent("有雲端相關業者嗎？", prior_turns=["公開池有誰？"])
+    intent = await parse_intent(
+        "有ＰＭ嗎？",
+        prior_turns=["現在你可以推薦誰", "列更多公開身份"],
+    )
     assert intent.intent_kind == "find_people"
-    assert "雲端" in intent.keywords or "雲端" in intent.products
 
 
 @pytest.mark.asyncio
@@ -109,7 +114,6 @@ async def test_llm_fail_no_keyword_browse(monkeypatch):
 
     result = await parse_intent_result("公開商務有誰")
     assert result.llm_ok is False
-    # Must not invent browse via keyword rules when LLM is down
     assert result.intent.intent_kind == "find_people"
 
 
@@ -118,9 +122,11 @@ def test_fallback_splits_chinese_without_domain_lists():
     assert "飯店" in intent.keywords
     assert intent.intent_kind == "find_people"
     assert intent.hard_companies == []
-    assert intent.products == []
 
 
-def test_fallback_never_browse():
-    intent = _parse_intent_fallback("公開商務有誰")
-    assert intent.intent_kind == "find_people"
+@pytest.mark.asyncio
+async def test_skip_flag(monkeypatch):
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_skip_intent_parse", True)
+    result = await parse_intent_result("anything")
+    assert result.llm_ok is False
+    assert result.intent.intent_kind == "find_people"

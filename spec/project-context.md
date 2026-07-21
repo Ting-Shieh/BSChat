@@ -26,6 +26,7 @@ PRD 現行：**`BSChat_PRD_v4.md`（已確認 2026-07-14；DDR-v4-13～17 於 20
 
 ## 已確認決策（標日期，rolling adjustment 可改）
 
+- 2026-07-21：**子團隊邀請補齊（流程已拍板 · 待實作）** — A1 僅邀已是企業成員；**僅隊 owner 發邀請**（主 Admin **不管**子團隊邀請）；一 Email 一邀請；寄信失敗仍建邀請＋可複製連結；owner 可見邀請中／已加入／已撤銷／已過期。通知：**本輪 F1 站內通知＋Email 備援**；**F2 Web Push＝Later**。
 - 2026-07-21：**多輪搜尋＋對話紀錄**（DDR-v4-17）— 原型 `screen-9-multiturn-search.html` 用戶確認。非 IM／閒聊；同一串可追問、可回看歷史；「公開商務有誰」＝瀏覽公開池。下一步：M5 kickoff → SA/ENG。
 - 2026-07-21：**企業成員旅程** — 批次邀請 → 加入自動建公開身份（`want_ai_recommend` 預設開、外鏈可空＝待補）→ Admin／員工皆可補外鏈才曝光；邀請中永不曝光。migration `025`；`POST …/invites/batch`；「我的」對外連結面板。
 - 2026-07-21：**企業後台只留「成員」主列表** — 「列表／新增／匯入」不並排；公開身份＋AI 開關於成員列；沒帳號不曝光；mail＝人。名片商級／可分享仍＝Later 後台（DDR-v4-13／14）。
@@ -85,6 +86,9 @@ PRD 現行：**`BSChat_PRD_v4.md`（已確認 2026-07-14；DDR-v4-13～17 於 20
 
 ## 變更紀錄
 
+- 2026-07-21：**子團隊邀請實作** — A1／僅 owner／一 Email 一邀請／狀態列；F1 `user_notifications`＋Email；migration `027`。F2 Web Push Later。
+- 2026-07-21：**子團隊邀請流程拍板（含 F）** — A1／僅 owner／一 Email 一邀請／狀態列；**F1 站內通知＋Email 本輪**；**F2 Web Push Later**。下一步：SA 增量 → ENG。
+- 2026-07-21：**意圖 policy v7** — browse 後職稱追問（有ＰＭ嗎）明示 → `find_people`；`browse_public_more` 僅無過濾「列更多」。
 - 2026-07-21：**M5 意圖解析改 OpenAI Chat 標準** — `system`＝政策、`user`＝先前 turns＋當前句；移除 `_has_topic_filter`／`_offline_meta_intent`／`_coerce_*` 關鍵字意圖硬規則；LLM 掛掉只機械 fallback `find_people`。對應 DDR-v4-17／SA multiturn。
 - 2026-07-21：**多輪搜尋＋對話紀錄確認** — DDR-v4-17；PRD §5.1；原型 screen-9；kickoff ✅；migration `026_search_sessions`；瀏覽公開池捷徑；FE 對話串＋紀錄。
 - 2026-07-20：**子團隊 ENG 落地（本機）** — migration `023_sub_teams`；`get_visible_capturer_ids`；API `/sub-teams`／join；FE「我的」三分頁＋`/teams/[id]`／`/join/team/[token]`。測試 4 綠。生產需 Railway `alembic upgrade`＋前端部署。

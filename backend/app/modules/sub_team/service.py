@@ -160,19 +160,88 @@ async def list_members(
     return [(m, u) for m, u in rows]
 
 
+async def _require_sub_team_owner(
+    db: AsyncSession, user_id: uuid.UUID, team_id: uuid.UUID
+) -> tuple[SubTeam, SubTeamMember]:
+    team, membership = await require_sub_team_member(db, user_id, team_id)
+    if membership.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="NOT_OWNER")
+    return team, membership
+
+
+def invite_status(invite: TeamInvite) -> str:
+    now = datetime.now(UTC)
+    if invite.revoked_at is not None:
+        return "revoked"
+    if invite.expires_at <= now:
+        return "expired"
+    if invite.use_count >= invite.max_uses:
+        return "accepted"
+    return "pending"
+
+
 async def create_sub_team_invite(
     db: AsyncSession,
     user: User,
     *,
     team_id: uuid.UUID,
+    invited_email: str,
     expires_days: int = 14,
-    max_uses: int = 50,
-) -> tuple[TeamInvite, str, SubTeam]:
-    team, membership = await require_sub_team_member(db, user.id, team_id)
+) -> tuple[TeamInvite, str, SubTeam, Organization, User]:
+    """Owner invites one org member by email (A1). Returns invitee User for F1 notification."""
+    from app.modules.notifications import service as notif_service
+
+    team, _ = await _require_sub_team_owner(db, user.id, team_id)
+    org = await require_org_member(db, user.id, team.org_id)
     if expires_days < 1 or expires_days > 90:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="INVALID_EXPIRES_DAYS")
-    if max_uses < 1 or max_uses > 500:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="INVALID_MAX_USES")
+
+    email = invited_email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="INVALID_EMAIL")
+
+    invitee = (
+        await db.execute(select(User).where(func.lower(User.email) == email))
+    ).scalar_one_or_none()
+    if invitee is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="NOT_ORG_MEMBER")
+
+    membership = (
+        await db.execute(
+            select(OrgMember).where(
+                OrgMember.org_id == team.org_id,
+                OrgMember.user_id == invitee.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="NOT_ORG_MEMBER")
+
+    already = (
+        await db.execute(
+            select(SubTeamMember).where(
+                SubTeamMember.sub_team_id == team.id,
+                SubTeamMember.user_id == invitee.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if already is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ALREADY_MEMBER")
+
+    pending = (
+        await db.execute(
+            select(TeamInvite).where(
+                TeamInvite.sub_team_id == team.id,
+                TeamInvite.invite_kind == "sub_team",
+                func.lower(TeamInvite.invited_email) == email,
+                TeamInvite.revoked_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    for inv in pending:
+        if invite_status(inv) == "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PENDING_EXISTS")
+
     raw = secrets.token_urlsafe(24)
     invite = TeamInvite(
         org_id=team.org_id,
@@ -180,13 +249,102 @@ async def create_sub_team_invite(
         token_hash=hash_invite_token(raw),
         created_by_user_id=user.id,
         expires_at=datetime.now(UTC) + timedelta(days=expires_days),
-        max_uses=max_uses,
+        max_uses=1,
         use_count=0,
         invite_kind="sub_team",
+        invited_email=email,
     )
     db.add(invite)
     await db.flush()
-    return invite, raw, team
+
+    await notif_service.create_notification(
+        db,
+        user_id=invitee.id,
+        kind="sub_team_invite",
+        title=f"邀請加入「{team.name}」",
+        body=f"{user.display_name or user.email} 邀請你加入子團隊",
+        payload={
+            "invite_id": str(invite.id),
+            "sub_team_id": str(team.id),
+            "sub_team_name": team.name,
+            "org_name": org.name,
+            "inviter_name": user.display_name or user.email,
+        },
+    )
+    return invite, raw, team, org, invitee
+
+
+async def list_sub_team_invites(
+    db: AsyncSession, user: User, team_id: uuid.UUID
+) -> list[TeamInvite]:
+    await _require_sub_team_owner(db, user.id, team_id)
+    rows = (
+        await db.execute(
+            select(TeamInvite)
+            .where(
+                TeamInvite.sub_team_id == team_id,
+                TeamInvite.invite_kind == "sub_team",
+            )
+            .order_by(TeamInvite.created_at.desc())
+        )
+    ).scalars().all()
+    return list(rows)
+
+
+async def revoke_sub_team_invite(
+    db: AsyncSession, user: User, invite_id: uuid.UUID
+) -> TeamInvite:
+    invite = (
+        await db.execute(select(TeamInvite).where(TeamInvite.id == invite_id))
+    ).scalar_one_or_none()
+    if invite is None or invite.invite_kind != "sub_team" or invite.sub_team_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="INVITE_NOT_FOUND")
+    await _require_sub_team_owner(db, user.id, invite.sub_team_id)
+    if invite.revoked_at is None:
+        invite.revoked_at = datetime.now(UTC)
+        await db.flush()
+    return invite
+
+
+async def accept_sub_team_invite_by_id(
+    db: AsyncSession, user: User, invite_id: uuid.UUID
+) -> SubTeam:
+    invite = (
+        await db.execute(select(TeamInvite).where(TeamInvite.id == invite_id))
+    ).scalar_one_or_none()
+    if invite is None or invite.invite_kind != "sub_team" or invite.sub_team_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="INVITE_NOT_FOUND")
+    if invite_status(invite) != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="INVITE_NOT_USABLE")
+    if invite.invited_email and user.email.strip().lower() != invite.invited_email.strip().lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="EMAIL_MISMATCH")
+    return await _accept_invite_row(db, user, invite)
+
+
+async def _accept_invite_row(db: AsyncSession, user: User, invite: TeamInvite) -> SubTeam:
+    assert invite.sub_team_id is not None
+    team = await get_sub_team(db, invite.sub_team_id)
+    org = (
+        await db.execute(select(Organization).where(Organization.id == team.org_id))
+    ).scalar_one()
+    await require_org_member(db, user.id, org.id)
+    if not org.is_enterprise:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="NOT_ENTERPRISE")
+    if invite.invited_email and user.email.strip().lower() != invite.invited_email.strip().lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="EMAIL_MISMATCH")
+    existing = (
+        await db.execute(
+            select(SubTeamMember).where(
+                SubTeamMember.sub_team_id == team.id,
+                SubTeamMember.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(SubTeamMember(sub_team_id=team.id, user_id=user.id, role="member"))
+        invite.use_count += 1
+        await db.flush()
+    return team
 
 
 async def preview_sub_team_invite(
@@ -204,23 +362,8 @@ async def preview_sub_team_invite(
 
 
 async def accept_sub_team_invite(db: AsyncSession, user: User, token: str) -> SubTeam:
-    invite, team, org = await preview_sub_team_invite(db, token)
-    await require_org_member(db, user.id, org.id)
-    if not org.is_enterprise:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="NOT_ENTERPRISE")
-    existing = (
-        await db.execute(
-            select(SubTeamMember).where(
-                SubTeamMember.sub_team_id == team.id,
-                SubTeamMember.user_id == user.id,
-            )
-        )
-    ).scalar_one_or_none()
-    if existing is None:
-        db.add(SubTeamMember(sub_team_id=team.id, user_id=user.id, role="member"))
-        invite.use_count += 1
-        await db.flush()
-    return team
+    invite, _team, _org = await preview_sub_team_invite(db, token)
+    return await _accept_invite_row(db, user, invite)
 
 
 async def remove_member(

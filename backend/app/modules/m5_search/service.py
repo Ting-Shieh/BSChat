@@ -326,8 +326,8 @@ async def execute_search(
 
     await _check_and_increment_quota(db, user)
     started = time.perf_counter()
-    # LLM classifies current turn; if LLM down, offline meta-intent may still browse.
-    parse_result = await parse_intent_result(body.query_text, prior_turns=priors or None)
+    # Intent from THIS query only (OpenAI system + user). Priors → effective_query for retrieval.
+    parse_result = await parse_intent_result(body.query_text)
     intent = parse_result.intent
     degraded = not parse_result.llm_ok
     ent = user.entitlement

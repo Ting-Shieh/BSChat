@@ -23,7 +23,7 @@ AI 商務配對：私有／團隊庫 + 可選公開電子身份；需求當下 P
 | M5b | 跨池搜尋 | 庫 + 公開推薦（M1 門檻） | v4 §2.2 | **v4 對齊完成** | [m5b-v4-align](kickoffs/m5b-v4-align-20260714.md) ✅ | – |
 | M6 | 公司補全 | enrich + 手動更新 + Pro stale refresh | v4 §2.4 | 已實作 | – | – |
 | M7 | 隱私 | 私有過濾 + 公開 opt-in 紅線 | v4 §3 | 已隨各模組 | – | – |
-| M7b | **子團隊共享池** | 可見範圍＝所屬子團隊；主管可建隊 | v4 §2.5 DDR-v4-10～11 | **ENG 進行中**（023＋API＋FE 分頁） | SA ✅；migration `023_sub_teams` | 待部署 Railway migrate；Admin 子團隊 Tab 可後補 |
+| M7b | **子團隊共享池** | 可見範圍＝所屬子團隊；主管可建隊 | v4 §2.5 DDR-v4-10～11 | **Email 邀請＋F1 站內通知 ✅**（migration 027） | delta-check 邀請 2026-07-21 ✅ | 待部署 Railway `027`＋前端 |
 | M8 | 匯出與行動 | 一鍵複製電話 / Email | v4 P1 | 已實作 | – | – |
 | M4 | 重複偵測 | Email / 電話比對提示 | – | 未實作 | – | – |
 
