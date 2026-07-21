@@ -15,7 +15,7 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-INTENT_PROMPT_VERSION = "v4"
+INTENT_PROMPT_VERSION = "v5"
 
 IntentKind = Literal["find_people", "browse_public", "browse_public_more"]
 
@@ -37,12 +37,13 @@ Return JSON only:
   "hard_products": []
 }}
 
-intent_kind rules (judge CURRENT message; use prior turns only as context):
-- browse_public: user wants an overview / who is in the public recommend pool, WITHOUT a specific product, role, or company filter yet.
-  IMPORTANT: Questions like 「公開商務有誰」「公開池有誰」「有哪些公開身份」「誰公開了」are ALWAYS browse_public — never find_people.
-  Examples: 公開商務有誰、公開池有哪些人、有誰公開、列出公開身份、公開推薦有誰、公開的人有哪些
-- browse_public_more: after a browse, user asks to show more from the pool (列更多、再多幾個、展開更多公開、列更多公開身份)
-- find_people: user is looking for people matching products / roles / companies / situations (including follow-ups that narrow a previous browse, e.g. 只要威剛、誰做工業電腦)
+intent_kind rules (judge CURRENT message; prior turns are context only — do NOT copy prior intent_kind):
+- browse_public: CURRENT message asks who/what is in the public recommend pool itself, with NO product, industry, role, or company filter.
+  Examples: 公開商務有誰、公開池有誰、有哪些公開身份、誰公開了、列出公開身份
+- browse_public_more: CURRENT message only asks to expand the pool preview (列更多、再多幾個、展開更多公開).
+- find_people: CURRENT message looks for people by theme/filter — including follow-ups that narrow a previous browse.
+  CRITICAL: After a browse, 「有雲端相關業者嗎」「誰做工業電腦」「只要威剛的」are ALWAYS find_people — never browse_public.
+  If the user names an industry/product/company/role or 「相關業者／廠商」, that is find_people.
 
 Guidelines for retrieval fields:
 - Use Traditional Chinese when the query is Chinese
@@ -109,10 +110,75 @@ def _offline_meta_intent(query: str, prior_turns: list[str] | None) -> ParsedInt
     if any(m in q for m in pool_markers) and (
         any(a in q for a in ask_markers) or q.endswith("誰") or "誰" in q
     ):
+        # If the same utterance also carries a topic filter, it is find_people (e.g. 公開池誰做雲端).
+        if _has_topic_filter(q):
+            return None
         return ParsedIntent(intent_kind="browse_public")
-    if q in ("公開商務有誰", "公開商務有誰?", "公開商務有誰？"):
+    if q in ("公開商務有誰", "公開商務有誰?", "公開商務有誰？", "公開池有誰", "公開池有誰?", "公開池有誰？"):
         return ParsedIntent(intent_kind="browse_public")
     return None
+
+
+def _has_topic_filter(query: str) -> bool:
+    """True when the utterance is narrowing by industry/product/role/company — not pool overview."""
+    q = (query or "").strip()
+    if not q:
+        return False
+    cues = (
+        "雲端",
+        "工業",
+        "電腦",
+        "相關",
+        "業者",
+        "廠商",
+        "供應",
+        "只要",
+        "就好",
+        "僅限",
+        "谁做",
+        "誰做",
+        "做IoT",
+        "做 iot",
+        "威剛",
+        "儲存",
+        "邊緣",
+        "半導體",
+        "軟體",
+        "硬體",
+        "系統整合",
+    )
+    if any(c.lower() in q.lower() for c in cues):
+        return True
+    # 「找／搜 …」with substance beyond pool markers
+    if re.search(r"(找|搜|有沒有).{0,12}(的人|業者|廠商|公司|窗口)", q):
+        return True
+    return False
+
+
+def _coerce_browse_if_topic(intent: ParsedIntent, query: str) -> ParsedIntent:
+    """LLM sometimes copies browse_public from prior turns — force find_people on topic filters."""
+    if intent.intent_kind not in ("browse_public", "browse_public_more"):
+        return intent
+    if intent.intent_kind == "browse_public_more":
+        return intent
+    # Keep browse only when CURRENT message is a pure pool overview.
+    if _offline_meta_intent(query, None) is not None and not _has_topic_filter(query):
+        return intent
+    if _has_topic_filter(query) or _offline_meta_intent(query, None) is None:
+        data = intent.model_dump()
+        data["intent_kind"] = "find_people"
+        coerced = ParsedIntent.model_validate(data)
+        if (
+            not coerced.keywords
+            and not coerced.products
+            and not coerced.roles
+            and not coerced.hard_companies
+            and not coerced.hard_roles
+            and not coerced.hard_products
+        ):
+            coerced.keywords = _parse_intent_fallback(query).keywords
+        return coerced
+    return intent
 
 
 async def _parse_intent_llm(query: str, prior_turns: list[str] | None) -> ParsedIntent:
@@ -142,6 +208,7 @@ async def _parse_intent_llm(query: str, prior_turns: list[str] | None) -> Parsed
             prompt, model=settings.gemini_search_model, timeout=30.0
         )
     intent = _parse_intent_json(text)
+    intent = _coerce_browse_if_topic(intent, query)
     if (
         intent.intent_kind == "find_people"
         and not intent.keywords

@@ -79,7 +79,29 @@ async def test_llm_fail_offline_browse(monkeypatch):
 
 def test_offline_meta_browse():
     assert _offline_meta_intent("公開商務有誰", None).intent_kind == "browse_public"
+    assert _offline_meta_intent("公開池有誰", None).intent_kind == "browse_public"
     assert _offline_meta_intent("誰做工業電腦", None) is None
+
+
+def test_coerce_cloud_followup_not_browse():
+    from app.ai.schemas.search_rerank import ParsedIntent
+    from app.ai.pipelines.search_intent import _coerce_browse_if_topic
+
+    wrong = ParsedIntent(intent_kind="browse_public", keywords=[])
+    fixed = _coerce_browse_if_topic(wrong, "有雲端相關業者嗎？")
+    assert fixed.intent_kind == "find_people"
+    assert "雲端" in "".join(fixed.keywords) or "雲端" in (fixed.semantic_query or "") or any(
+        "雲" in k for k in fixed.keywords
+    )
+
+
+def test_coerce_keeps_pure_browse():
+    from app.ai.schemas.search_rerank import ParsedIntent
+    from app.ai.pipelines.search_intent import _coerce_browse_if_topic
+
+    browse = ParsedIntent(intent_kind="browse_public")
+    kept = _coerce_browse_if_topic(browse, "公開池有誰？")
+    assert kept.intent_kind == "browse_public"
 
 
 def test_fallback_never_browse_without_meta():
