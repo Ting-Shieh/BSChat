@@ -4,6 +4,8 @@ import asyncio
 import uuid
 
 import pytest
+
+from intent_llm_testutil import patch_intent_llm
 from httpx import ASGITransport, AsyncClient
 
 from app.core.db import async_session_factory
@@ -110,10 +112,12 @@ def _mock_public_search_llm(monkeypatch, stub_id: uuid.UUID) -> None:
 
     monkeypatch.setattr("app.modules.m5_search.service.retrieve_public_candidates", fake_retrieve_public)
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+    patch_intent_llm(monkeypatch, fake_intent)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
 

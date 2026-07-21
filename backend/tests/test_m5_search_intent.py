@@ -1,7 +1,6 @@
 import pytest
 
 from app.ai.pipelines.search_intent import (
-    _offline_meta_intent,
     _parse_intent_fallback,
     parse_intent,
     parse_intent_result,
@@ -9,27 +8,30 @@ from app.ai.pipelines.search_intent import (
 
 
 @pytest.mark.asyncio
-async def test_parse_intent_gemini(monkeypatch):
-    async def fake_gemini(prompt: str, **kwargs):
-        assert "飯店相關推薦人" in prompt
-        return """```json
-{
+async def test_parse_intent_openai_roles(monkeypatch):
+    async def fake_chat(messages, **kwargs):
+        assert messages[0]["role"] == "system"
+        assert "intent_kind" in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        assert "飯店相關推薦人" in messages[1]["content"]
+        return """{
   "intent_kind": "find_people",
   "products": ["飯店"],
   "roles": [],
   "events": [],
   "regions": [],
   "keywords": ["飯店", "推薦", "度假"],
+  "semantic_query": "找飯店相關推薦人",
   "hard_roles": [],
   "hard_companies": [],
   "hard_products": []
-}
-```"""
+}"""
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_skip_intent_parse", False)
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_gemini)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.openai_chat", fake_chat)
 
     intent = await parse_intent("飯店相關推薦人")
     assert intent.intent_kind == "find_people"
@@ -39,7 +41,8 @@ async def test_parse_intent_gemini(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_parse_intent_browse_public(monkeypatch):
-    async def fake_gemini(prompt: str, **kwargs):
+    async def fake_chat(messages, **kwargs):
+        assert "公開商務有誰" in messages[1]["content"]
         return """{
   "intent_kind": "browse_public",
   "products": [],
@@ -55,62 +58,69 @@ async def test_parse_intent_browse_public(monkeypatch):
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_skip_intent_parse", False)
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_gemini)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.openai_chat", fake_chat)
 
     intent = await parse_intent("公開商務有誰")
     assert intent.intent_kind == "browse_public"
 
 
 @pytest.mark.asyncio
-async def test_llm_fail_offline_browse(monkeypatch):
-    async def boom(*args, **kwargs):
-        raise RuntimeError("403 leaked")
+async def test_followup_cloud_is_find_people(monkeypatch):
+    async def fake_chat(messages, **kwargs):
+        user = messages[1]["content"]
+        assert "公開池有誰" in user
+        assert "有雲端相關業者嗎" in user
+        return """{
+  "intent_kind": "find_people",
+  "products": ["雲端"],
+  "roles": [],
+  "events": [],
+  "regions": [],
+  "keywords": ["雲端", "業者"],
+  "semantic_query": "找雲端相關業者",
+  "hard_roles": [],
+  "hard_companies": [],
+  "hard_products": []
+}"""
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_skip_intent_parse", False)
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", boom)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.openai_chat", fake_chat)
+
+    intent = await parse_intent("有雲端相關業者嗎？", prior_turns=["公開池有誰？"])
+    assert intent.intent_kind == "find_people"
+    assert "雲端" in intent.keywords or "雲端" in intent.products
+
+
+@pytest.mark.asyncio
+async def test_llm_fail_no_keyword_browse(monkeypatch):
+    async def boom(*args, **kwargs):
+        raise RuntimeError("403")
+
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_skip_intent_parse", False)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_intent.openai_chat", boom)
 
     result = await parse_intent_result("公開商務有誰")
     assert result.llm_ok is False
-    assert result.intent.intent_kind == "browse_public"
-
-
-def test_offline_meta_browse():
-    assert _offline_meta_intent("公開商務有誰", None).intent_kind == "browse_public"
-    assert _offline_meta_intent("公開池有誰", None).intent_kind == "browse_public"
-    assert _offline_meta_intent("誰做工業電腦", None) is None
-
-
-def test_coerce_cloud_followup_not_browse():
-    from app.ai.schemas.search_rerank import ParsedIntent
-    from app.ai.pipelines.search_intent import _coerce_browse_if_topic
-
-    wrong = ParsedIntent(intent_kind="browse_public", keywords=[])
-    fixed = _coerce_browse_if_topic(wrong, "有雲端相關業者嗎？")
-    assert fixed.intent_kind == "find_people"
-    assert "雲端" in "".join(fixed.keywords) or "雲端" in (fixed.semantic_query or "") or any(
-        "雲" in k for k in fixed.keywords
-    )
-
-
-def test_coerce_keeps_pure_browse():
-    from app.ai.schemas.search_rerank import ParsedIntent
-    from app.ai.pipelines.search_intent import _coerce_browse_if_topic
-
-    browse = ParsedIntent(intent_kind="browse_public")
-    kept = _coerce_browse_if_topic(browse, "公開池有誰？")
-    assert kept.intent_kind == "browse_public"
-
-
-def test_fallback_never_browse_without_meta():
-    intent = _parse_intent_fallback("公開商務有誰")
-    assert intent.intent_kind == "find_people"
+    # Must not invent browse via keyword rules when LLM is down
+    assert result.intent.intent_kind == "find_people"
 
 
 def test_fallback_splits_chinese_without_domain_lists():
     intent = _parse_intent_fallback("飯店相關推薦人")
     assert "飯店" in intent.keywords
+    assert intent.intent_kind == "find_people"
     assert intent.hard_companies == []
     assert intent.products == []
+
+
+def test_fallback_never_browse():
+    intent = _parse_intent_fallback("公開商務有誰")
+    assert intent.intent_kind == "find_people"

@@ -4,6 +4,8 @@ import asyncio
 import uuid
 
 import pytest
+
+from intent_llm_testutil import patch_intent_llm
 from httpx import ASGITransport, AsyncClient
 
 from app.core.db import async_session_factory
@@ -195,10 +197,12 @@ async def test_strict_precision_empty_when_llm_returns_nothing(monkeypatch):
 ```"""
 
         monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-        monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-        monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+        patch_intent_llm(monkeypatch, fake_intent)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
         _mock_retrieve_single(monkeypatch, contact_id)
@@ -254,10 +258,12 @@ async def test_balanced_keeps_semantic_match_below_old_threshold(monkeypatch):
 ```"""
 
         monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-        monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-        monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+        patch_intent_llm(monkeypatch, fake_intent)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
         _mock_retrieve_single(monkeypatch, contact_id, retrieval_score=0.08)
@@ -298,10 +304,12 @@ async def test_no_retrieval_fallback_when_no_match(monkeypatch):
 ```"""
 
         monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-        monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-        monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+        patch_intent_llm(monkeypatch, fake_intent)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
         _mock_retrieve_single(monkeypatch, contact_id)
@@ -344,10 +352,12 @@ async def test_search_debug_payload_when_enabled(monkeypatch):
 ```"""
 
         monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-        monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-        monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+        patch_intent_llm(monkeypatch, fake_intent)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+        monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
         monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
         from app.modules.m5_search.hybrid import PoolRetrievalDebug, RetrievalCandidateDebug
@@ -397,7 +407,7 @@ async def test_search_debug_payload_when_enabled(monkeypatch):
         body = search.json()
         debug = body.get("debug")
         assert debug is not None
-        assert debug["intent_prompt_version"] == "v3"
+        assert debug["intent_prompt_version"] == "v6"
         assert debug["rerank_prompt_version"] == "v5"
         assert debug["private"]["pool"] == "private"
         assert debug["rerank_input_count"] >= 1

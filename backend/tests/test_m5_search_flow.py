@@ -4,6 +4,8 @@ import uuid
 
 import pytest
 
+from intent_llm_testutil import patch_intent_llm
+
 from app.ai.pipelines.search_intent import parse_intent
 from app.ai.pipelines.search_rerank import rerank_contacts
 from app.modules.m5_search.constraints import filter_rerank_results, satisfies_hard_constraints
@@ -44,10 +46,12 @@ async def test_intent_to_rerank_hotel_flow(monkeypatch):
 ```"""
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+    patch_intent_llm(monkeypatch, fake_intent)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
     intent = await parse_intent("飯店相關推薦人")
@@ -110,10 +114,12 @@ async def test_intent_to_filter_aws_architect_flow(monkeypatch):
 ```"""
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+    patch_intent_llm(monkeypatch, fake_intent)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_use_mock", False)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.gemini_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.search_provider", "openai")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.settings.openai_api_key", "test-key")
+    monkeypatch.setattr("app.ai.pipelines.search_rerank.openai_generate_text", fake_rerank)
     monkeypatch.setattr("app.ai.pipelines.search_rerank.gemini_generate_text", fake_rerank)
 
     intent = await parse_intent("從我AWS人脈中找從事架構師的就好")
@@ -205,8 +211,7 @@ async def test_intent_no_match_keywords(monkeypatch):
 ```"""
 
     monkeypatch.setattr("app.ai.pipelines.search_intent.settings.search_use_mock", False)
-    monkeypatch.setattr("app.ai.pipelines.search_intent.settings.gemini_api_key", "test-key")
-    monkeypatch.setattr("app.ai.pipelines.search_intent.gemini_generate_text", fake_intent)
+    patch_intent_llm(monkeypatch, fake_intent)
 
     intent = await parse_intent("量子計算超導體奈米機器人")
     assert intent.keywords

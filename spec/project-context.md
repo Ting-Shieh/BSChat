@@ -85,6 +85,7 @@ PRD 現行：**`BSChat_PRD_v4.md`（已確認 2026-07-14；DDR-v4-13～17 於 20
 
 ## 變更紀錄
 
+- 2026-07-21：**M5 意圖解析改 OpenAI Chat 標準** — `system`＝政策、`user`＝先前 turns＋當前句；移除 `_has_topic_filter`／`_offline_meta_intent`／`_coerce_*` 關鍵字意圖硬規則；LLM 掛掉只機械 fallback `find_people`。對應 DDR-v4-17／SA multiturn。
 - 2026-07-21：**多輪搜尋＋對話紀錄確認** — DDR-v4-17；PRD §5.1；原型 screen-9；kickoff ✅；migration `026_search_sessions`；瀏覽公開池捷徑；FE 對話串＋紀錄。
 - 2026-07-20：**子團隊 ENG 落地（本機）** — migration `023_sub_teams`；`get_visible_capturer_ids`；API `/sub-teams`／join；FE「我的」三分頁＋`/teams/[id]`／`/join/team/[token]`。測試 4 綠。生產需 Railway `alembic upgrade`＋前端部署。
 - 2026-07-20：**子團隊 SA/SD 完成** — `BSChat_SA-SD_subteam.md`：共同隊籍可見性、`sub_teams`／members、migration 023 規劃；下一棒 ENG。

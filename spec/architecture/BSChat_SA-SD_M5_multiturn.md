@@ -28,8 +28,9 @@
 Response 增補：`session_id`、`assistant_message?`、`follow_up_suggestions?`
 
 > 瀏覽公開池：由 **LLM `intent_kind`** 判定（`browse_public`／`browse_public_more`／`find_people`），**不用關鍵字寫死**。  
+> OpenAI 路徑：`system`＝意圖政策、`user`＝先前 turns＋當前句；`response_format=json_object`。  
 > `browse_public` → 摘要＋**3** 張樣例＋追問建議；`browse_public_more` → 再展開最多 12。  
-> 無 LLM 時 fallback **不當 browse**（避免誤觸）。
+> LLM 不可用時：機械關鍵字 fallback **只當 find_people**（不發明 browse）。
 
 ## 追問
 

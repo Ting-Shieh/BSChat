@@ -1,4 +1,7 @@
-"""Search intent parsing — Gemini first; intent_kind via LLM (DDR-v4-17)."""
+"""Search intent parsing — OpenAI Chat Completions (system / user); LLM owns intent_kind.
+
+DDR-v4-17: multi-turn browse vs find_people is semantic judgment, not keyword rules.
+"""
 
 from __future__ import annotations
 
@@ -9,51 +12,51 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.ai.gemini_client import gemini_generate_text
-from app.ai.openai_client import openai_generate_text
+from app.ai.openai_client import openai_chat
 from app.ai.schemas.search_rerank import ParsedIntent
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-INTENT_PROMPT_VERSION = "v5"
+INTENT_PROMPT_VERSION = "v6"
 
 IntentKind = Literal["find_people", "browse_public", "browse_public_more"]
 
-INTENT_PROMPT = """You parse a B2B contact-search utterance for BSChat (private rolodex + optional public recommend pool).
+# System role = stable policy. Do not put the live query here.
+INTENT_SYSTEM = """You are BSChat's search-intent classifier for a B2B contact product
+(private rolodex + optional public recommend pool).
 
-{prior_block}Current user message: {query}
-
-Return JSON only:
-{{
+Return JSON only (no markdown fences) with this shape:
+{
   "intent_kind": "find_people" | "browse_public" | "browse_public_more",
   "products": ["industry or product themes"],
   "roles": ["job functions, soft preference"],
   "events": ["event or occasion labels if mentioned"],
   "regions": ["regions if mentioned"],
   "keywords": ["2-8 retrieval terms — short phrases likely to appear on cards or company data"],
-  "semantic_query": "one sentence describing who/what the user is looking for, for semantic search",
+  "semantic_query": "one sentence describing who/what the user is looking for",
   "hard_roles": [],
   "hard_companies": [],
   "hard_products": []
-}}
+}
 
-intent_kind rules (judge CURRENT message; prior turns are context only — do NOT copy prior intent_kind):
-- browse_public: CURRENT message asks who/what is in the public recommend pool itself, with NO product, industry, role, or company filter.
+intent_kind (judge the CURRENT user message; prior turns are context only — never copy prior intent_kind):
+- browse_public: current message asks who/what is in the public recommend pool itself,
+  with NO product, industry, role, or company filter yet.
   Examples: 公開商務有誰、公開池有誰、有哪些公開身份、誰公開了、列出公開身份
-- browse_public_more: CURRENT message only asks to expand the pool preview (列更多、再多幾個、展開更多公開).
-- find_people: CURRENT message looks for people by theme/filter — including follow-ups that narrow a previous browse.
-  CRITICAL: After a browse, 「有雲端相關業者嗎」「誰做工業電腦」「只要威剛的」are ALWAYS find_people — never browse_public.
-  If the user names an industry/product/company/role or 「相關業者／廠商」, that is find_people.
+- browse_public_more: current message only asks to show more from that pool preview
+  (列更多、再多幾個、展開更多公開).
+- find_people: current message looks for people by theme/filter — including follow-ups that
+  narrow a previous browse (有雲端相關業者嗎、誰做工業電腦、只要威剛的、找做 IoT 的).
+  If the user names an industry, product, company, role, or 「相關業者／廠商／供應商」, use find_people.
 
-Guidelines for retrieval fields:
+Field guidelines:
 - Use Traditional Chinese when the query is Chinese
-- Decompose natural language into multiple keywords; never return the whole sentence as one keyword
-- hard_* arrays ONLY when the user explicitly requires ALL results to satisfy them (e.g. 就好, 只要, 仅限, 從…人脈中找…)
-- Put literal searchable phrases into hard_* (job titles, company names, product names) as they might appear on cards
-- When not an explicit hard constraint, use keywords / roles / products instead
-- Do not invent a stored user profile; extract only from this query (+ prior if needed for hard filters)
+- Decompose into multiple keywords; never return the whole sentence as one keyword
+- hard_* only when the user explicitly requires ALL results to satisfy them (只要、就好、仅限…)
 - For browse_public / browse_public_more, products/roles/keywords may be empty
-- semantic_query should capture implied meaning in one concise sentence (empty string OK for pure browse)
+- For find_people after a browse, fill keywords/products from the CURRENT filter
+- semantic_query: one concise sentence (empty string OK for pure browse)
 """
 
 
@@ -77,7 +80,10 @@ def _parse_intent_json(text: str) -> ParsedIntent:
 
 
 def _parse_intent_fallback(query: str) -> ParsedIntent:
-    """Offline keyword fallback — find_people only (no invent browse)."""
+    """Mechanical retrieval fallback when LLM is unavailable — always find_people.
+
+    Does NOT invent browse_public. Splits the utterance into rough keywords only.
+    """
     keywords = [w for w in re.split(r"[\s，,、？?！!。]+", query.strip()) if len(w) >= 2]
     if len(keywords) == 1 and len(keywords[0]) > 4:
         text = keywords[0]
@@ -90,125 +96,26 @@ def _parse_intent_fallback(query: str) -> ParsedIntent:
     return ParsedIntent(intent_kind="find_people", keywords=keywords[:8])
 
 
-def _offline_meta_intent(query: str, prior_turns: list[str] | None) -> ParsedIntent | None:
-    """Last-resort meta classifier when LLM is down — only directory browse acts.
-
-    Not a product/role keyword list; detects «ask about the public pool itself».
-    """
-    q = (query or "").strip().lower()
-    if not q:
-        return None
-    more_hints = ("列更多", "再多", "展開更多", "更多公開", "再給我幾個")
-    if any(h in q for h in more_hints) and (
-        "公開" in q or (prior_turns and any("公開" in (t or "") for t in prior_turns[-2:]))
-    ):
-        return ParsedIntent(intent_kind="browse_public_more")
-
-    # Asking who/what is in the public recommend pool (no specific product filter).
-    pool_markers = ("公開商務", "公開池", "公開身份", "公開推薦", "公開名片", "公開的人")
-    ask_markers = ("有誰", "有哪些", "名單", "列表", "列出", "誰公開", "有沒有人")
-    if any(m in q for m in pool_markers) and (
-        any(a in q for a in ask_markers) or q.endswith("誰") or "誰" in q
-    ):
-        # If the same utterance also carries a topic filter, it is find_people (e.g. 公開池誰做雲端).
-        if _has_topic_filter(q):
-            return None
-        return ParsedIntent(intent_kind="browse_public")
-    if q in ("公開商務有誰", "公開商務有誰?", "公開商務有誰？", "公開池有誰", "公開池有誰?", "公開池有誰？"):
-        return ParsedIntent(intent_kind="browse_public")
-    return None
-
-
-def _has_topic_filter(query: str) -> bool:
-    """True when the utterance is narrowing by industry/product/role/company — not pool overview."""
-    q = (query or "").strip()
-    if not q:
-        return False
-    cues = (
-        "雲端",
-        "工業",
-        "電腦",
-        "相關",
-        "業者",
-        "廠商",
-        "供應",
-        "只要",
-        "就好",
-        "僅限",
-        "谁做",
-        "誰做",
-        "做IoT",
-        "做 iot",
-        "威剛",
-        "儲存",
-        "邊緣",
-        "半導體",
-        "軟體",
-        "硬體",
-        "系統整合",
-    )
-    if any(c.lower() in q.lower() for c in cues):
-        return True
-    # 「找／搜 …」with substance beyond pool markers
-    if re.search(r"(找|搜|有沒有).{0,12}(的人|業者|廠商|公司|窗口)", q):
-        return True
-    return False
-
-
-def _coerce_browse_if_topic(intent: ParsedIntent, query: str) -> ParsedIntent:
-    """LLM sometimes copies browse_public from prior turns — force find_people on topic filters."""
-    if intent.intent_kind not in ("browse_public", "browse_public_more"):
-        return intent
-    if intent.intent_kind == "browse_public_more":
-        return intent
-    # Keep browse only when CURRENT message is a pure pool overview.
-    if _offline_meta_intent(query, None) is not None and not _has_topic_filter(query):
-        return intent
-    if _has_topic_filter(query) or _offline_meta_intent(query, None) is None:
-        data = intent.model_dump()
-        data["intent_kind"] = "find_people"
-        coerced = ParsedIntent.model_validate(data)
-        if (
-            not coerced.keywords
-            and not coerced.products
-            and not coerced.roles
-            and not coerced.hard_companies
-            and not coerced.hard_roles
-            and not coerced.hard_products
-        ):
-            coerced.keywords = _parse_intent_fallback(query).keywords
-        return coerced
-    return intent
-
-
-async def _parse_intent_llm(query: str, prior_turns: list[str] | None) -> ParsedIntent:
+def _user_message(query: str, prior_turns: list[str] | None) -> str:
+    parts: list[str] = []
     if prior_turns:
         lines = "\n".join(f"- {t}" for t in prior_turns[-4:])
-        prior_block = f"Prior turns in this search thread:\n{lines}\n\n"
-    else:
-        prior_block = ""
-    prompt = INTENT_PROMPT.format(query=query, prior_block=prior_block)
-    provider = settings.effective_search_provider
-    if provider == "openai":
-        text = await openai_generate_text(
-            prompt, model=settings.openai_search_model, timeout=30.0
-        )
-    elif provider == "claude" and settings.anthropic_api_key:
-        import anthropic
+        parts.append(f"Prior turns in this search thread:\n{lines}")
+    parts.append(f"Current user message:\n{query}")
+    return "\n\n".join(parts)
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        msg = await client.messages.create(
-            model=settings.search_rerank_model,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = msg.content[0].text
-    else:
-        text = await gemini_generate_text(
-            prompt, model=settings.gemini_search_model, timeout=30.0
-        )
+
+async def _parse_intent_openai(query: str, prior_turns: list[str] | None) -> ParsedIntent:
+    text = await openai_chat(
+        [
+            {"role": "system", "content": INTENT_SYSTEM},
+            {"role": "user", "content": _user_message(query, prior_turns)},
+        ],
+        model=settings.openai_search_model,
+        timeout=30.0,
+        response_format={"type": "json_object"},
+    )
     intent = _parse_intent_json(text)
-    intent = _coerce_browse_if_topic(intent, query)
     if (
         intent.intent_kind == "find_people"
         and not intent.keywords
@@ -220,6 +127,64 @@ async def _parse_intent_llm(query: str, prior_turns: list[str] | None) -> Parsed
     ):
         intent.keywords = _parse_intent_fallback(query).keywords
     return intent
+
+
+async def _parse_intent_gemini(query: str, prior_turns: list[str] | None) -> ParsedIntent:
+    """Gemini path: same policy text, single prompt (no native roles). Prefer OpenAI."""
+    prompt = (
+        INTENT_SYSTEM
+        + "\n\n---\n\n"
+        + _user_message(query, prior_turns)
+        + "\n\nReturn JSON only."
+    )
+    text = await gemini_generate_text(
+        prompt, model=settings.gemini_search_model, timeout=30.0
+    )
+    intent = _parse_intent_json(text)
+    if (
+        intent.intent_kind == "find_people"
+        and not intent.keywords
+        and not intent.products
+        and not intent.roles
+        and not intent.hard_companies
+        and not intent.hard_roles
+        and not intent.hard_products
+    ):
+        intent.keywords = _parse_intent_fallback(query).keywords
+    return intent
+
+
+async def _parse_intent_claude(query: str, prior_turns: list[str] | None) -> ParsedIntent:
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    msg = await client.messages.create(
+        model=settings.search_rerank_model,
+        max_tokens=1024,
+        system=INTENT_SYSTEM,
+        messages=[{"role": "user", "content": _user_message(query, prior_turns)}],
+    )
+    intent = _parse_intent_json(msg.content[0].text)
+    if (
+        intent.intent_kind == "find_people"
+        and not intent.keywords
+        and not intent.products
+        and not intent.roles
+        and not intent.hard_companies
+        and not intent.hard_roles
+        and not intent.hard_products
+    ):
+        intent.keywords = _parse_intent_fallback(query).keywords
+    return intent
+
+
+async def _parse_intent_llm(query: str, prior_turns: list[str] | None) -> ParsedIntent:
+    provider = settings.effective_search_provider
+    if provider == "openai":
+        return await _parse_intent_openai(query, prior_turns)
+    if provider == "claude" and settings.anthropic_api_key:
+        return await _parse_intent_claude(query, prior_turns)
+    return await _parse_intent_gemini(query, prior_turns)
 
 
 async def parse_intent_result(
@@ -241,20 +206,13 @@ async def parse_intent_result(
         except Exception as exc:
             err = f"{type(exc).__name__}: {exc}"
             logger.warning("search intent LLM failed: %s", err[:300])
-            offline = _offline_meta_intent(query, prior_turns)
-            if offline is not None:
-                return IntentParseResult(intent=offline, llm_ok=False, llm_error=err)
+            # No keyword invent of browse_* — degrade to mechanical find_people only.
             return IntentParseResult(
                 intent=_parse_intent_fallback(query),
                 llm_ok=False,
                 llm_error=err,
             )
 
-    offline = _offline_meta_intent(query, prior_turns)
-    if offline is not None:
-        return IntentParseResult(
-            intent=offline, llm_ok=False, llm_error="SEARCH_LLM_DISABLED"
-        )
     return IntentParseResult(
         intent=_parse_intent_fallback(query),
         llm_ok=False,

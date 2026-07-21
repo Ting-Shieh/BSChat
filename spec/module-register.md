@@ -18,7 +18,8 @@ AI 商務配對：私有／團隊庫 + 可選公開電子身份；需求當下 P
 | M2 | 名片收錄 | 批次連拍 + OCR + URL/QR/vCard + 延後確認 | v4 Now | 已完成 - 待驗證 | – | – |
 | M3 | 聯絡人 + 職責推估 | 結構化聯絡人 + LLM 職責推估 | v4 §2.4 | 已完成 - 待驗證 | – | – |
 | M3.5 | 個人 LinkedIn 補充 | Pro：公開資料 + LLM 職責摘要 | v4 Later API | **Pro 就緒** | 2026-06-11 | LinkedIn 官方 API 擱置 |
-| M5 | AI 搜尋 | 多輪搜尋＋紀錄 + Plan UI + 分區 | v4 §2.1 §5／DDR-17 | **多輪 Code 進行中**（026 sessions） | [m5-multiturn-20260721](kickoffs/m5-multiturn-20260721.md) ✅ | 需重啟 API 吃 026 |
+| M5 | AI 搜尋 | 多輪搜尋＋紀錄 + Plan UI + 分區 | v4 §2.1 §5／DDR-17 | **意圖 = OpenAI system/user（v6）**；無關鍵字硬規則 | [m5-multiturn-20260721](kickoffs/m5-multiturn-20260721.md) ✅ | 正式區 SEARCH_PROVIDER=openai |
+
 | M5b | 跨池搜尋 | 庫 + 公開推薦（M1 門檻） | v4 §2.2 | **v4 對齊完成** | [m5b-v4-align](kickoffs/m5b-v4-align-20260714.md) ✅ | – |
 | M6 | 公司補全 | enrich + 手動更新 + Pro stale refresh | v4 §2.4 | 已實作 | – | – |
 | M7 | 隱私 | 私有過濾 + 公開 opt-in 紅線 | v4 §3 | 已隨各模組 | – | – |
