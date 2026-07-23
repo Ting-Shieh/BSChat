@@ -193,6 +193,24 @@ export async function revokeEnterpriseInvite(
   });
 }
 
+export interface RegenerateEnterpriseInviteLinkResponse {
+  invite_id: string;
+  invited_email: string | null;
+  expires_at: string;
+  join_path: string;
+  token: string;
+}
+
+export async function regenerateEnterpriseInviteLink(
+  token: string,
+  inviteId: string,
+): Promise<RegenerateEnterpriseInviteLinkResponse> {
+  return apiFetch(`/api/v1/enterprise/invites/${inviteId}/regenerate-link`, {
+    method: "POST",
+    token,
+  });
+}
+
 export async function transferEnterpriseAdmin(
   token: string,
   orgId: string,

@@ -11,6 +11,7 @@ import {
   listEnterpriseMembers,
   listMyEnterpriseApplications,
   removeEnterpriseMember,
+  regenerateEnterpriseInviteLink,
   revokeEnterpriseInvite,
   submitEnterpriseApplication,
   transferEnterpriseAdmin,
@@ -152,6 +153,13 @@ export function useRevokeEnterpriseInvite(orgId: string) {
       await qc.invalidateQueries({ queryKey: ["enterprise-invites", orgId] });
       await qc.refetchQueries({ queryKey: ["enterprise-invites", orgId] });
     },
+  });
+}
+
+export function useRegenerateEnterpriseInviteLink(orgId: string) {
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (inviteId: string) => regenerateEnterpriseInviteLink(token!, inviteId),
   });
 }
 

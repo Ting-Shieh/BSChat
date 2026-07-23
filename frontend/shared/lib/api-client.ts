@@ -23,7 +23,7 @@ export class ApiError extends Error {
 
 const API_ERROR_ZH: Record<string, string> = {
   INVITE_EXHAUSTED:
-    "此邀請連結已使用過。若對方還在「邀請中」，請撤銷後重新發送一封新邀請。",
+    "此邀請連結已使用過。若你已加入企業，請直接進入名片庫；尚未加入請請 Admin 撤銷後重發新邀請。",
   INVITE_REVOKED: "此邀請已被撤銷，請請 Admin 重新發送邀請。",
   INVITE_EXPIRED: "此邀請已過期，請請 Admin 重新發送邀請。",
   INVITE_NOT_FOUND: "找不到此邀請，連結可能無效或已刪除。",

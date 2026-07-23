@@ -204,3 +204,56 @@ def test_enterprise_invite_email_template_escapes_dynamic_values():
     assert 'token=&quot;unsafe&quot;&amp;x=1' in html
     assert "<Acme & Co>" in text
     assert "2026/07/30" in text
+
+
+@pytest.mark.asyncio
+async def test_regenerate_enterprise_invite_link_invalidates_old_token(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(get_settings(), "allow_dev_login", True)
+    monkeypatch.setattr(get_settings(), "enterprise_ops_token", None)
+    monkeypatch.setattr(get_settings(), "resend_api_key", None)
+    monkeypatch.setattr(get_settings(), "smtp_password", None)
+
+    admin_email = f"ent-r-{uuid.uuid4().hex[:8]}@example.com"
+    member_email = f"ent-rm-{uuid.uuid4().hex[:8]}@example.com"
+    admin_token = await _dev_login(client, admin_email)
+    slug = f"ent-r-{uuid.uuid4().hex[:8]}"
+
+    prov = await client.post(
+        "/api/v1/ops/enterprise/provision",
+        json={"company_name": "Regen Co", "slug": slug, "admin_email": admin_email},
+    )
+    assert prov.status_code == 200, prov.text
+    org_id = prov.json()["org_id"]
+
+    inv = await client.post(
+        f"/api/v1/enterprise/orgs/{org_id}/invites",
+        headers=_auth(admin_token),
+        json={"email": member_email, "expires_days": 7},
+    )
+    assert inv.status_code == 200, inv.text
+    old_token = inv.json()["token"]
+    invite_id = inv.json()["invite_id"]
+
+    regen = await client.post(
+        f"/api/v1/enterprise/invites/{invite_id}/regenerate-link",
+        headers=_auth(admin_token),
+    )
+    assert regen.status_code == 200, regen.text
+    new_token = regen.json()["token"]
+    assert new_token != old_token
+    assert regen.json()["join_path"] == f"/join/enterprise/{new_token}"
+
+    member_token = await _dev_login(client, member_email, plan_tier="free")
+    old_accept = await client.post(
+        f"/api/v1/enterprise/invites/{old_token}/accept",
+        headers=_auth(member_token),
+    )
+    assert old_accept.status_code in (404, 410)
+
+    new_accept = await client.post(
+        f"/api/v1/enterprise/invites/{new_token}/accept",
+        headers=_auth(member_token),
+    )
+    assert new_accept.status_code == 200, new_accept.text

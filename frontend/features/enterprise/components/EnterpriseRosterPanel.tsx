@@ -6,6 +6,7 @@ import {
   useCreateEnterpriseInviteBatch,
   useEnterpriseInvites,
   useEnterpriseMembers,
+  useRegenerateEnterpriseInviteLink,
   useRemoveEnterpriseMember,
   useRevokeEnterpriseInvite,
   useTransferEnterpriseAdmin,
@@ -83,6 +84,7 @@ export function EnterpriseRosterPanel({
   const createBatch = useCreateEnterpriseInviteBatch(orgId);
   const removeMember = useRemoveEnterpriseMember(orgId);
   const revokeInvite = useRevokeEnterpriseInvite(orgId);
+  const regenerateLink = useRegenerateEnterpriseInviteLink(orgId);
   const transfer = useTransferEnterpriseAdmin(orgId);
   const createStub = useCreateStub(orgId);
   const updateStub = useUpdateStub(orgId);
@@ -146,6 +148,7 @@ export function EnterpriseRosterPanel({
     createBatch.isPending ||
     removeMember.isPending ||
     revokeInvite.isPending ||
+    regenerateLink.isPending ||
     transfer.isPending ||
     createStub.isPending ||
     updateStub.isPending ||
@@ -269,7 +272,7 @@ export function EnterpriseRosterPanel({
                     setInviteStatus(
                       res.email_sent
                         ? `邀請信已寄到 ${res.invited_email}`
-                        : "邀請已建立；寄信未設定時請複製連結。",
+                        : "邀請已建立，但信沒寄出。請複製下方連結傳給對方。",
                     );
                     setEmail("");
                   },
@@ -424,14 +427,44 @@ export function EnterpriseRosterPanel({
                     <p className="text-[10px] text-amber-700">狀態：邀請中</p>
                     <AiLabel state="pending" />
                   </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="shrink-0 text-xs text-red-600 disabled:opacity-50"
-                    onClick={() => revokeInvite.mutate(i.invite_id)}
-                  >
-                    撤銷
-                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      disabled={busy || regenerateLink.isPending}
+                      className="text-xs font-semibold text-[var(--color-primary)] disabled:opacity-50"
+                      onClick={() => {
+                        setError(null);
+                        regenerateLink.mutate(i.invite_id, {
+                          onSuccess: async (res) => {
+                            const url = `${window.location.origin}${res.join_path}`;
+                            setInviteUrl(url);
+                            setInviteStatus(
+                              `已產生 ${res.invited_email || "邀請"} 的連結（舊連結失效）。請複製傳給對方。`,
+                            );
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              setCopied(true);
+                              window.setTimeout(() => setCopied(false), 1500);
+                            } catch {
+                              /* clipboard may be blocked; URL box still shown */
+                            }
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          },
+                          onError: (e) => setError(formatApiError(e, "無法產生連結")),
+                        });
+                      }}
+                    >
+                      複製連結
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="text-xs text-red-600 disabled:opacity-50"
+                      onClick={() => revokeInvite.mutate(i.invite_id)}
+                    >
+                      撤銷
+                    </button>
+                  </div>
                 </li>
               );
             }

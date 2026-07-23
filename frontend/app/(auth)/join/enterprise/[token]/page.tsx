@@ -25,9 +25,16 @@ function JoinEnterpriseBody() {
     void previewEnterpriseInvite(token)
       .then(setPreview)
       .catch((e) => {
-        setError(formatApiError(e, "邀請無效或已過期"));
+        const msg = formatApiError(e, "邀請無效或已過期");
+        // 連結已用過且本人已是企業成員 → 直接進名片庫
+        const alreadyInOrg = (me?.org_memberships || []).some((o) => o.is_enterprise);
+        if (msg.includes("已使用") && bschatToken && alreadyInOrg) {
+          router.replace("/contacts");
+          return;
+        }
+        setError(msg);
       });
-  }, [token]);
+  }, [token, me, bschatToken, router]);
 
   useEffect(() => {
     if (!bschatToken || !token || !preview || accept.isPending || accept.isSuccess) return;

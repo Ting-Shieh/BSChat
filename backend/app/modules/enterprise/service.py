@@ -396,6 +396,34 @@ async def revoke_enterprise_invite(db: AsyncSession, admin: User, invite_id: uui
     await db.flush()
 
 
+async def regenerate_enterprise_invite_link(
+    db: AsyncSession, admin: User, invite_id: uuid.UUID
+) -> tuple[TeamInvite, str]:
+    """Rotate raw token for a pending invite so Admin can copy a fresh join URL.
+
+    Raw tokens are not stored (only hash); regenerating is the supported way to
+    recover a copyable link after the create response was dismissed.
+    """
+    invite = await db.get(TeamInvite, invite_id)
+    if invite is None or invite.invite_kind != "enterprise_seat":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="INVITE_NOT_FOUND")
+    await require_primary_admin(db, admin, invite.org_id)
+    if invite.revoked_at is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="INVITE_REVOKED")
+    if invite.use_count >= invite.max_uses:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="INVITE_EXHAUSTED")
+    expires = invite.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < datetime.now(UTC):
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="INVITE_EXPIRED")
+
+    raw = secrets.token_urlsafe(24)
+    invite.token_hash = hash_invite_token(raw)
+    await db.flush()
+    return invite, raw
+
+
 async def preview_enterprise_invite(
     db: AsyncSession, raw_token: str
 ) -> tuple[TeamInvite, Organization]:

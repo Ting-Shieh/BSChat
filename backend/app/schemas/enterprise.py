@@ -125,5 +125,13 @@ class EnterpriseInviteListItem(BaseModel):
     created_at: datetime
 
 
+class RegenerateEnterpriseInviteLinkResponse(BaseModel):
+    invite_id: UUID
+    invited_email: str | None
+    expires_at: datetime
+    join_path: str
+    token: str
+
+
 class TransferAdminRequest(BaseModel):
     new_admin_user_id: UUID

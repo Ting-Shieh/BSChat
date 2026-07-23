@@ -25,6 +25,7 @@ from app.schemas.enterprise import (
     EnterpriseInvitePreview,
     EnterpriseMemberInfo,
     EnterpriseOrgSummary,
+    RegenerateEnterpriseInviteLinkResponse,
     TransferAdminRequest,
 )
 from app.schemas.org import MyPublicIdentityResponse, MyPublicIdentityUpdate
@@ -348,6 +349,26 @@ async def revoke_invite(
 ) -> None:
     await ent.revoke_enterprise_invite(db, user, invite_id)
     await db.commit()
+
+
+@router.post(
+    "/enterprise/invites/{invite_id}/regenerate-link",
+    response_model=RegenerateEnterpriseInviteLinkResponse,
+)
+async def regenerate_invite_link(
+    invite_id: UUID,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> RegenerateEnterpriseInviteLinkResponse:
+    invite, raw = await ent.regenerate_enterprise_invite_link(db, user, invite_id)
+    await db.commit()
+    return RegenerateEnterpriseInviteLinkResponse(
+        invite_id=invite.id,
+        invited_email=invite.invited_email,
+        expires_at=invite.expires_at,
+        join_path=f"/join/enterprise/{raw}",
+        token=raw,
+    )
 
 
 @router.get("/enterprise/invites/{token}", response_model=EnterpriseInvitePreview)
