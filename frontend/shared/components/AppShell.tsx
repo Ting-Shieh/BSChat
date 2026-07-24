@@ -109,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className={cn("flex min-h-0 flex-1 flex-col", hideChrome && "bg-black")}>{children}</div>
 
       {!hideChrome && (
-        <nav className="sticky bottom-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
+        <nav className="sticky bottom-0 z-30 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
           <ul className="flex items-end px-1">
             {tabs.map((tab) => {
               const active = tab.elevate
@@ -120,9 +120,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <li key={tab.href} className="relative flex-1">
                     <Link
                       href={tab.href}
-                      className="flex flex-col items-center gap-0.5 pb-2 pt-1 text-[10px] text-[var(--color-text-secondary)]"
+                      className="flex min-h-14 touch-manipulation flex-col items-center justify-end gap-0.5 pb-2 pt-1 text-[10px] text-[var(--color-text-secondary)]"
                     >
-                      <span className="-mt-3 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[var(--color-accent)] text-xl font-bold text-white shadow-[0_4px_10px_rgba(217,119,6,0.35)]">
+                      <span className="-mt-3 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-accent)] text-xl font-bold text-white shadow-[0_4px_10px_rgba(217,119,6,0.35)] active:scale-95">
                         {tab.icon}
                       </span>
                       <span className={cn(active && "font-semibold text-[var(--color-primary)]")}>
@@ -137,7 +137,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     href={tab.href}
                     className={cn(
-                      "flex flex-col items-center gap-0.5 py-2.5 text-[10px]",
+                      "flex min-h-14 touch-manipulation flex-col items-center justify-center gap-0.5 py-2 text-[10px] active:opacity-80",
                       active
                         ? "font-semibold text-[var(--color-primary)]"
                         : "text-[var(--color-text-secondary)]",

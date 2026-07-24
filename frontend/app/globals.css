@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/*
+ * Mobile: do not treat the first tap as :hover.
+ * Sticky hover is a common cause of “must tap twice” on iOS/Android.
+ */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 /* BSChat Design Foundation v1.0 — Light mode default（展場戶外可讀） */
 :root {
   --color-primary: #0f4c5c;
@@ -52,6 +64,28 @@ body {
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-geist-sans), "PingFang TC", "Noto Sans TC", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Faster taps: skip double-tap zoom delay; clearer press feedback on touch */
+button,
+a,
+[role="button"],
+summary,
+label[for],
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+@media (hover: none) {
+  button:active,
+  a:active,
+  [role="button"]:active {
+    opacity: 0.82;
+  }
 }
 
 .theme-camera {

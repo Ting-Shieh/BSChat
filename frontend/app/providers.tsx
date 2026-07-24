@@ -9,8 +9,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            refetchOnWindowFocus: true,
-            refetchOnMount: "always",
+            // Mobile soft-keyboard / tab focus often fires window focus and
+            // remounts UI mid-tap; prefer stale-while-revalidate over aggressive refetch.
+            refetchOnWindowFocus: false,
+            refetchOnMount: true,
+            staleTime: 30_000,
           },
         },
       }),
