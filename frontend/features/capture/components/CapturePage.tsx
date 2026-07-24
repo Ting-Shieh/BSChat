@@ -30,7 +30,7 @@ export function CapturePage() {
         <div className="relative mx-auto mt-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-accent)] ring-4 ring-white">
           <span className="text-2xl font-bold text-white">＋</span>
         </div>
-        <p className="relative mt-3 text-sm font-semibold text-white">連拍收錄</p>
+        <p className="relative mt-3 text-sm font-semibold text-white">開始拍照</p>
       </Link>
 
       <div className="flex flex-col gap-2">

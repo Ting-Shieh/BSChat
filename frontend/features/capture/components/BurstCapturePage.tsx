@@ -8,6 +8,7 @@ import type { ThumbnailStatus } from "@/shared/types/capture";
 import * as captureApi from "../api";
 import { useCaptureSession, useCards } from "../hooks";
 import { useCaptureStore } from "../store";
+import { CameraViewfinder } from "./CameraViewfinder";
 
 function statusBadge(status: ThumbnailStatus) {
   if (status === "ocr_done") return "✅";
@@ -29,6 +30,7 @@ export function BurstCapturePage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+  const [useFileFallback, setUseFileFallback] = useState(false);
   const { sessionId, setSessionId, thumbnails, addThumbnail, updateThumbnail, clear } =
     useCaptureStore();
   const { data: session } = useCaptureSession(sessionId);
@@ -91,18 +93,29 @@ export function BurstCapturePage() {
     [token, sessionId, updateThumbnail],
   );
 
-  const handleCapture = async (file: File) => {
-    if (!sessionReady || !sessionId) return;
-    const localUrl = URL.createObjectURL(file);
-    addThumbnail({ id: localUrl, localUrl, status: "uploading" });
-    await uploadFile(file, localUrl);
-  };
+  const handleCapture = useCallback(
+    async (file: File) => {
+      if (!sessionReady || !sessionId) return;
+      const localUrl = URL.createObjectURL(file);
+      addThumbnail({ id: localUrl, localUrl, status: "uploading" });
+      await uploadFile(file, localUrl);
+    },
+    [sessionReady, sessionId, addThumbnail, uploadFile],
+  );
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) void handleCapture(file);
     e.target.value = "";
   };
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onNeedFallback = useCallback(() => {
+    setUseFileFallback(true);
+  }, []);
 
   const finishSession = async () => {
     if (token && sessionId) {
@@ -115,6 +128,7 @@ export function BurstCapturePage() {
   const doneCount = session?.confirmed_count ?? 0;
   const pendingCount = session?.pending_count ?? 0;
   const processingCount = thumbnails.filter((t) => !isTerminal(t.status)).length;
+  const cameraActive = sessionReady && !initError && !useFileFallback;
 
   return (
     <div className="theme-camera flex min-h-dvh flex-1 flex-col bg-black text-[var(--color-text-primary)]">
@@ -144,38 +158,57 @@ export function BurstCapturePage() {
         />
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-900">
-        <p className="mb-6 text-center text-sm text-zinc-400">
-          {!sessionReady
-            ? "正在準備收錄…"
-            : initError
-              ? "無法連上伺服器"
-              : "點擊下方快門拍攝名片"}
-          <br />
-          {sessionReady && !initError && "可使用相機或相簿"}
-        </p>
-        {initError && <p className="mb-4 text-sm text-red-400">{initError}</p>}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={onFileChange}
-        />
-        <button
-          type="button"
-          disabled={!sessionReady || !!initError}
-          onClick={() => fileInputRef.current?.click()}
-          className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-amber-600 ring-4 ring-amber-600/30 disabled:opacity-40"
-          aria-label="快門"
-        />
-        {processingCount > 0 && (
-          <p className="mt-4 text-center text-xs text-zinc-500">
-            AI 辨識中…（若過久請檢查後端 Gemini key）
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onFileChange}
+      />
+
+      {initError ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4">
+          <p className="text-sm text-red-400">{initError}</p>
+        </div>
+      ) : !sessionReady ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-zinc-400">正在準備收錄…</p>
+        </div>
+      ) : useFileFallback ? (
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-900 px-4">
+          <p className="mb-6 text-center text-sm text-zinc-400">
+            點下方按鈕開啟系統相機或相簿
           </p>
-        )}
-      </div>
+          <button
+            type="button"
+            onClick={openFilePicker}
+            className="rounded-full bg-[var(--color-accent)] px-8 py-3.5 text-sm font-semibold text-white"
+          >
+            開啟相機／相簿
+          </button>
+          <button
+            type="button"
+            className="mt-4 text-xs text-zinc-500 underline"
+            onClick={() => setUseFileFallback(false)}
+          >
+            再試即時相機
+          </button>
+        </div>
+      ) : (
+        <CameraViewfinder
+          active={cameraActive}
+          disabled={!sessionReady}
+          onCapture={(file) => void handleCapture(file)}
+          onNeedFallback={onNeedFallback}
+        />
+      )}
+
+      {processingCount > 0 && (
+        <p className="px-4 pb-2 text-center text-xs text-zinc-500">
+          AI 辨識中…（若過久請檢查後端 Gemini key）
+        </p>
+      )}
 
       {thumbnails.length > 0 && (
         <div className="border-t border-zinc-800 bg-zinc-950 p-3">

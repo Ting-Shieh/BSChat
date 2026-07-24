@@ -16,7 +16,7 @@ import { cn } from "@/shared/lib/cn";
 const tabs = [
   { href: "/search", label: "搜尋", icon: "🔍" },
   { href: "/contacts", label: "名片庫", icon: "📇" },
-  { href: "/capture", label: "收錄", icon: "＋", elevate: true as const },
+  { href: "/capture/burst", label: "收錄", icon: "＋", elevate: true as const },
   { href: "/review", label: "待確認", icon: "✓", badge: true as const },
   { href: "/settings", label: "我的", icon: "👤" },
 ];
@@ -112,7 +112,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="sticky bottom-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 backdrop-blur">
           <ul className="flex items-end px-1">
             {tabs.map((tab) => {
-              const active = pathname.startsWith(tab.href);
+              const active = tab.elevate
+                ? pathname.startsWith("/capture")
+                : pathname.startsWith(tab.href);
               if (tab.elevate) {
                 return (
                   <li key={tab.href} className="relative flex-1">
